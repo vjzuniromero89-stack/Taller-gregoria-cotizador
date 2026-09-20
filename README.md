@@ -1,9 +1,4 @@
-# Taller Gregoriana - Cotizador
+# Taller Gregoriana – Cotizador
 
-Versión recuperada del cotizador a partir del archivo de aplicación disponible.
-
-## Abrir localmente
-Abra `index.html` en un navegador.
-
-## Contenido
-- `index.html`: aplicación web recuperada.
+Versión corregida para despliegue estático en Cloudflare Workers/Pages.
+Se corrigió el HTML que estaba cerrando prematuramente el bloque JavaScript y mostrando el código fuente en pantalla.
