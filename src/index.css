@@ -1,7 +1,0 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-html, body, #root { min-height: 100%; margin: 0; }
-* { box-sizing: border-box; }
-button { font: inherit; cursor: pointer; border: 0; }
