@@ -278,8 +278,12 @@ async function sbSaveProductos(lista) {
       body: JSON.stringify(filas),
     });
     const result = await res.json().catch(() => ({}));
-    if (!res.ok || !result.ok) { console.error("Error guardando productos:", result); return false; }
-    return true;
+    if (!res.ok || !result.ok) {
+      console.error("Error guardando productos:", result);
+      const detail = result?.error?.message || result?.error?.details || result?.error?.hint || result?.error || `HTTP ${res.status}`;
+      return { ok: false, error: typeof detail === "string" ? detail : JSON.stringify(detail) };
+    }
+    return { ok: true };
   } catch (e) { console.error("Error guardando productos:", e); return false; }
 }
 
@@ -2131,8 +2135,11 @@ export default function App() {
   const guardarProductos = async (data) => {
     setProductos(data);
     await localSave("productos", data);
-    const ok = await sbSaveProductos(data);
-    if (!ok) { avisar("No se pudo guardar el producto en Supabase.", "error"); return false; }
+    const resultado = await sbSaveProductos(data);
+    if (!resultado?.ok) {
+      avisar(`Supabase: ${resultado?.error || "No se pudo guardar el producto."}`, "error");
+      return false;
+    }
     return true;
   };
   const guardarInternas = async (data) => {
