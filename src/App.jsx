@@ -7,8 +7,9 @@ import {
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const runtimeEnv = globalThis.__APP_CONFIG__ || {};
+const SUPABASE_URL = runtimeEnv.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_KEY = runtimeEnv.SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = SUPABASE_URL && SUPABASE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_KEY)
   : null;
