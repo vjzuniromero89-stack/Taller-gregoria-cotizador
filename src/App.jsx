@@ -2095,7 +2095,7 @@ export default function App() {
           sbLoadCotizacionesInternas(), sbLoadEmpresa(),
         ]);
       }
-      if (p === null) {
+      if (p == null) {
         console.warn("Supabase no disponible, usando IndexedDB local");
         setOnline(false);
         [p, ci, cc, em] = await Promise.all([
