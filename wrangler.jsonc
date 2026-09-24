@@ -1,9 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "taller-gregoria-cotizador",
+  "main": "worker.js",
   "compatibility_date": "2026-09-20",
   "assets": {
+    "binding": "ASSETS",
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "observability": {
+    "enabled": true
   }
 }
