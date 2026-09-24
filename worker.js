@@ -7,6 +7,7 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 function sbHeaders(env, extra = {}) {
   return {
     apikey: env.SUPABASE_ANON_KEY,
+    authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
     "content-type": "application/json",
     ...extra,
   };
@@ -56,18 +57,16 @@ export default {
       try { lista = await request.json(); } catch { return json({ ok: false, error: "JSON inválido" }, 400); }
       if (!Array.isArray(lista)) return json({ ok: false, error: "Se esperaba una lista de productos" }, 400);
 
-      const del = await sbRequest(env, "productos?id=neq.___nada___", { method: "DELETE", headers: { Prefer: "return=minimal" } });
-      if (!del.ok) return json({ ok: false, stage: "delete", error: del.error }, del.status);
-
       if (lista.length) {
-        const ins = await sbRequest(env, "productos", {
+        const ins = await sbRequest(env, "productos?on_conflict=id", {
           method: "POST",
-          headers: { Prefer: "return=minimal" },
+          headers: { Prefer: "resolution=merge-duplicates,return=representation" },
           body: JSON.stringify(lista),
         });
-        if (!ins.ok) return json({ ok: false, stage: "insert", error: ins.error }, ins.status);
+        if (!ins.ok) return json({ ok: false, stage: "upsert", status: ins.status, error: ins.error }, ins.status);
+        return json({ ok: true, count: lista.length, saved: Array.isArray(ins.data) ? ins.data.length : lista.length });
       }
-      return json({ ok: true, count: lista.length });
+      return json({ ok: true, count: 0, saved: 0 });
     }
 
     return env.ASSETS.fetch(request);
