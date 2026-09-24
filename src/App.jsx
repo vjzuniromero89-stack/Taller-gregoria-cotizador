@@ -253,32 +253,34 @@ const fecha = (iso) => {
 
 /* ---------- Supabase helpers ---------- */
 async function sbLoadProductos() {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from("productos").select("*").order("creado", { ascending: false });
-  if (error) { console.error("Error cargando productos:", error); return null; }
-  return (data || []).map((p) => ({
-    id: p.id, codigo: p.codigo || "", nombre: p.nombre || "",
-    cbm: p.cbm || 0, peso: p.peso || 0,
-    precioCbm: p.precio_cbm || 0, precioProducto: p.precio_producto || 0,
-    precioVenta: p.precio_venta || 0, foto: p.foto || "",
-  }));
+  try {
+    const res = await fetch("/api/productos", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) { console.error("Error cargando productos:", data); return null; }
+    return (data || []).map((p) => ({
+      id: p.id, codigo: p.codigo || "", nombre: p.nombre || "",
+      cbm: p.cbm || 0, peso: p.peso || 0,
+      precioCbm: p.precio_cbm || 0, precioProducto: p.precio_producto || 0,
+      precioVenta: p.precio_venta || 0, foto: p.foto || "",
+    }));
+  } catch (e) { console.error("Error cargando productos:", e); return null; }
 }
 async function sbSaveProductos(lista) {
-  if (!supabase) return false;
   try {
     const filas = lista.map((p) => ({
       id: p.id, codigo: p.codigo, nombre: p.nombre,
       cbm: p.cbm, peso: p.peso, precio_cbm: p.precioCbm,
       precio_producto: p.precioProducto, precio_venta: p.precioVenta, foto: p.foto || "",
     }));
-    const { error: errDel } = await supabase.from("productos").delete().neq("id", "___nada___");
-    if (errDel) { console.error(errDel); return false; }
-    if (filas.length > 0) {
-      const { error: errIns } = await supabase.from("productos").insert(filas);
-      if (errIns) { console.error(errIns); return false; }
-    }
+    const res = await fetch("/api/productos", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(filas),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || !result.ok) { console.error("Error guardando productos:", result); return false; }
     return true;
-  } catch (e) { console.error(e); return false; }
+  } catch (e) { console.error("Error guardando productos:", e); return false; }
 }
 
 async function sbLoadCotizacionesClientes() {
@@ -2090,10 +2092,10 @@ export default function App() {
   useEffect(() => {
     (async () => {
       let p, ci, cc, em;
+      p = await sbLoadProductos();
       if (supabase) {
-        [p, ci, cc, em] = await Promise.all([
-          sbLoadProductos(), sbLoadCotizacionesClientes(),
-          sbLoadCotizacionesInternas(), sbLoadEmpresa(),
+        [ci, cc, em] = await Promise.all([
+          sbLoadCotizacionesClientes(), sbLoadCotizacionesInternas(), sbLoadEmpresa(),
         ]);
       }
       if (p == null) {
@@ -2129,10 +2131,8 @@ export default function App() {
   const guardarProductos = async (data) => {
     setProductos(data);
     await localSave("productos", data);
-    if (supabase) {
-      const ok = await sbSaveProductos(data);
-      if (!ok) { avisar("No se pudo guardar en la nube. Revisa tu conexión.", "error"); return false; }
-    }
+    const ok = await sbSaveProductos(data);
+    if (!ok) { avisar("No se pudo guardar el producto en Supabase.", "error"); return false; }
     return true;
   };
   const guardarInternas = async (data) => {
