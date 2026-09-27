@@ -99,6 +99,8 @@ const STYLES = `
 }
 .product-model-label { display:block; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#5B6B75; }
 .product-model { font-family:"Barlow Condensed",system-ui,sans-serif; font-size:clamp(28px,5vw,36px); line-height:1.15; font-weight:800; color:#14222B; overflow-wrap:anywhere; margin:2px 0 8px; }
+.product-description-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 18px; margin-top:12px; }
+.product-description-item { min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; line-height:1.4; color:#5B6B75; font-size:14px; }
 .product-description { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin-top:10px; color:#5B6B75; }
 @media (max-width:480px) {
   .product-card { flex-wrap:wrap; }
@@ -2268,8 +2270,6 @@ function EnlaceCatalogo({ avisar }) {
 function CatalogoPublico() {
   const [productos, setProductos] = useState([]);
   const [q, setQ] = useState("");
-  const [categoriaFiltro, setCategoriaFiltro] = useState("");
-  const categorias = [...new Set(productos.map(p => p.categoria || "Sin categoría"))].sort((a, b) => a.localeCompare(b, "es"));
   const [estado, setEstado] = useState("cargando");
   const [intento, setIntento] = useState(0);
   useEffect(() => {
@@ -2285,7 +2285,7 @@ function CatalogoPublico() {
     })();
     return () => controller.abort();
   }, [intento]);
-  const filtrados = productos.filter(p => (!categoriaFiltro || (p.categoria || "Sin categoría") === categoriaFiltro) && `${p.codigo} ${p.nombre}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const filtrados = productos.filter(p => `${p.codigo} ${p.nombre}`.toLowerCase().includes(q.trim().toLowerCase()));
   return <div className="app"><style>{STYLES}</style>
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px", minHeight: "100vh" }}>
       <EncabezadoPagina icon={Package} titulo="Catálogo de productos" descripcion="Taller Gregoriana" />
@@ -2293,15 +2293,12 @@ function CatalogoPublico() {
         estado === "error" ? <div className="paper p-6 mt-4" role="alert"><p>No pudimos cargar el catálogo. Inténtalo nuevamente.</p><button className="btn btn-primary mt-3" onClick={() => setIntento(i => i + 1)}>Reintentar</button></div> : <>
           <div className="section-toolbar mt-4">
             <p className="muted">{filtrados.length} de {productos.length} productos</p>
-            <select className="inp" style={{ maxWidth: 280 }} aria-label="Filtrar por categoría" value={categoriaFiltro} onChange={e => setCategoriaFiltro(e.target.value)}>
-              <option value="">Todas las categorías</option>
-              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+
             <input className="inp" style={{ maxWidth: 360 }} aria-label="Buscar producto" placeholder="Buscar por nombre o código" value={q} onChange={e => setQ(e.target.value)} />
           </div>
           {!productos.length ? <p className="paper p-6 text-center muted">Próximamente encontrarás nuestros productos aquí.</p> :
             !filtrados.length ? <p className="paper p-6 text-center muted">No hay productos que coincidan con tu búsqueda.</p> :
-            <div className="space-y-3">{filtrados.map(p => <FichaProducto key={p.id} p={{ ...p, precioProducto: p.precio_producto }} />)}</div>}
+            <div className="space-y-3">{filtrados.map(p => <FichaProducto key={p.id} p={{ ...p, precioProducto: p.precio_producto }} mostrarCategoria={false} />)}</div>}
         </>}
     </main>
   </div>;
@@ -2311,7 +2308,7 @@ export default function App() {
   return window.location.pathname.replace(/\/+$/, "") === "/catalogo" ? <CatalogoPublico /> : <AdminApp />;
 }
 
-function FichaProducto({ p, acciones, children }) {
+function FichaProducto({ p, acciones, children, mostrarCategoria = true }) {
   const k = cbmCobro(p.cbm, p.peso);
   return (
                 <article className="paper p-3 flex gap-3 product-card">
@@ -2325,8 +2322,8 @@ function FichaProducto({ p, acciones, children }) {
                       </div>
                       {acciones && <div className="flex flex-shrink-0">{acciones}</div>}
                     </div>
-                    <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>
-                    {p.descripcion && <p className="product-description">{p.descripcion}</p>}
+                    {mostrarCategoria && <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>}
+                    {p.descripcion && <DescripcionProducto texto={p.descripcion} />}
                     <div className="product-info-line mt-2">
                       <Dato label="CBM por volumen" value={`${m3(k.vol)} m³`} />
                       <Dato label="CBM por peso" value={`${m3(k.porPeso)} m³`} />
@@ -2373,4 +2370,22 @@ function LineasCotizacion({ lineas, interna, mostrarVenta }) {
       </dl>
     </article>;
   })}</div>;
+}
+
+
+function DescripcionProducto({ texto }) {
+  // Separate consecutive numbered features, even when two share one input line.
+  const matches = [...texto.matchAll(/(\d+)[.)]\s+/g)];
+  const marcas = [];
+  for (const match of matches) {
+    if (Number(match[1]) === marcas.length + 1 &&
+        (marcas.length > 0 || texto.slice(0, match.index).trim() === "")) marcas.push(match);
+  }
+  if (marcas.length < 2) return <p className="product-description">{texto}</p>;
+  const partes = marcas.map((m, i) => texto.slice(m.index + m[0].length, marcas[i + 1]?.index ?? texto.length).trim());
+  return <div className="product-description-grid" role="list" aria-label="Características del producto">
+    {partes.map((parte, i) => <div className="product-description-item" role="listitem" key={i}>
+      <span className="font-semibold">{i + 1}.</span> {parte}
+    </div>)}
+  </div>;
 }
