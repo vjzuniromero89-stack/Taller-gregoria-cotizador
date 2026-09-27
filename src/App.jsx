@@ -1418,11 +1418,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
               {creandoCategoria && <p className="muted text-sm mt-1">La categoría se guardará junto con el producto.</p>}
             </div>
 
-            <div>
-              <label className="lbl" htmlFor="p-descripcion">Descripción</label>
-              <textarea id="p-descripcion" className="inp" rows={3} value={form.descripcion}
-                onChange={set("descripcion")} placeholder="Características y detalles del producto" style={{ resize: "vertical" }} />
-            </div>
+
 
             <div className="form-grid-3">
               <div>
@@ -2323,7 +2319,7 @@ function FichaProducto({ p, acciones, children, mostrarCategoria = true }) {
                       {acciones && <div className="flex flex-shrink-0">{acciones}</div>}
                     </div>
                     {mostrarCategoria && <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>}
-                    {p.descripcion && <DescripcionProducto texto={p.descripcion} />}
+
                     <div className="product-info-line mt-2">
                       <Dato label="CBM por volumen" value={`${m3(k.vol)} m³`} />
                       <Dato label="CBM por peso" value={`${m3(k.porPeso)} m³`} />
@@ -2370,22 +2366,4 @@ function LineasCotizacion({ lineas, interna, mostrarVenta }) {
       </dl>
     </article>;
   })}</div>;
-}
-
-
-function DescripcionProducto({ texto }) {
-  // Separate consecutive numbered features, even when two share one input line.
-  const matches = [...texto.matchAll(/(\d+)[.)]\s+/g)];
-  const marcas = [];
-  for (const match of matches) {
-    if (Number(match[1]) === marcas.length + 1 &&
-        (marcas.length > 0 || texto.slice(0, match.index).trim() === "")) marcas.push(match);
-  }
-  if (marcas.length < 2) return <p className="product-description">{texto}</p>;
-  const partes = marcas.map((m, i) => texto.slice(m.index + m[0].length, marcas[i + 1]?.index ?? texto.length).trim());
-  return <div className="product-description-grid" role="list" aria-label="Características del producto">
-    {partes.map((parte, i) => <div className="product-description-item" role="listitem" key={i}>
-      <span className="font-semibold">{i + 1}.</span> {parte}
-    </div>)}
-  </div>;
 }
