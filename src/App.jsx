@@ -1088,14 +1088,14 @@ function ModalShell({ titulo, subtitulo, onClose, children }) {
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(20,34,43,.55)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-50" style={{ background: "rgba(20,34,43,.55)", overflowY: "auto", padding: "12px" }} onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={titulo}
-        className="w-full sm:max-w-3xl overflow-y-auto" style={{ background: "#fff", borderRadius: "12px 12px 0 0", maxHeight: "92vh" }}
+        className="w-full" style={{ background: "#fff", borderRadius: 12, maxWidth: 1500, margin: "0 auto", minWidth: 0 }}
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between p-4 sticky top-0 z-10" style={{ background: "#fff", borderBottom: "1px solid #E1E7EA" }}>
           <div>
             <div className="cond text-2xl font-semibold num">{titulo}</div>
-            <div className="text-sm muted">{subtitulo}</div>
+            <div className="text-sm muted" style={{ overflowWrap: "anywhere" }}>{subtitulo}</div>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Cerrar"><X size={22} /></button>
         </div>
@@ -1552,56 +1552,7 @@ function DetalleInterna({ cot, onClose, empresa, avisar }) {
 
   return (
     <ModalShell titulo={cot.numero} subtitulo={`${cot.cliente || "Sin cliente"}, ${fecha(cot.fecha)}${origen}`} onClose={onClose}>
-      <div className="overflow-x-auto" style={{ border: "1px solid #E1E7EA", borderRadius: 8 }}>
-        <table className="w-full text-sm" style={{ minWidth: 1100 }}>
-          <thead style={{ background: "#F3F6F7" }}>
-            <tr>
-              <th className={th}>Foto</th><th className={th}>Nombre</th><th className={th}>Cant.</th>
-              <th className={th}>CBM x unidad</th><th className={th}>Total CBM</th>
-              <th className={th}>Peso</th><th className={th}>Total peso</th>
-              <th className={th}>Precio CBM</th><th className={th}>Precio prod.</th>
-              <th className={th}>Total precio producto</th><th className={th}>Total precio CBM</th>
-              {hayVenta && <th className={th}>Total venta</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {cot.lineas.map((l) => {
-              const c = calcLinea(l);
-              return (
-                <tr key={l.id} className="row-line">
-                  <td className="px-2 py-2"><Thumb src={l.foto} size={44} /></td>
-                  <td className="px-2 py-2"><div className="font-medium">{l.nombre}</div><div className="muted num">{l.codigo}</div></td>
-                  <td className={td}>{l.cantidad}</td>
-                  <td className={td}>{m3(num(l.cbm))} m³</td>
-                  <td className={td}>{m3(c.totalCbm)} m³</td>
-                  <td className={td}>{num(l.peso) > 0 ? kg(num(l.peso)) : "Sin peso"}</td>
-                  <td className={td}>{kg(c.totalPeso)}</td>
-                  <td className={td}>{money(l.precioCbm)}</td>
-                  <td className={td}>{money(l.precioProducto)}</td>
-                  <td className={`${td} font-semibold`}>{money(c.totalProducto)}</td>
-                  <td className={`${td} font-semibold`}>{money(c.totalPrecioCbm)}</td>
-                  {hayVenta && <td className={`${td} font-semibold`}>{money(c.totalVenta)}</td>}
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot style={{ background: "#E9EFF1", borderTop: "2px solid #142731" }}>
-            <tr>
-              <td colSpan={2} className="px-2 py-3 font-semibold">TOTALES</td>
-              <td className={`${td} font-semibold`}>{t.totalCantidad}</td>
-              <td className={td}>—</td>
-              <td className={`${td} font-semibold`}>{m3(t.totalCbm)} m³</td>
-              <td className={td}>—</td>
-              <td className={`${td} font-semibold`}>{kg(t.totalPeso)}</td>
-              <td className={td}>—</td>
-              <td className={td}>—</td>
-              <td className={`${td} font-semibold`}>{money(t.totalProducto)}</td>
-              <td className={`${td} font-semibold`}>{money(t.totalPrecioCbm)}</td>
-              {hayVenta && <td className={`${td} font-semibold`}>{money(t.totalVenta)}</td>}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <LineasCotizacion lineas={cot.lineas} interna={true} mostrarVenta={hayVenta} />
 
       <Etiqueta filas={filasInternas(t)} totalLabel="Total general" total={money(t.general)} />
 
@@ -1773,48 +1724,7 @@ function DetalleCliente({ cot, onClose, onDelete, empresa, avisar }) {
 
   return (
     <ModalShell titulo={cot.numero} subtitulo={`${cot.cliente || "Sin cliente"}, ${fecha(cot.fecha)}`} onClose={onClose}>
-      <div className="overflow-x-auto" style={{ border: "1px solid #E1E7EA", borderRadius: 8 }}>
-        <table className="w-full text-sm" style={{ minWidth: 940 }}>
-          <thead style={{ background: "#F3F6F7" }}>
-            <tr>
-              <th className={th}>Foto</th><th className={th}>Nombre</th><th className={th}>Cant.</th>
-              <th className={th}>CBM x unidad</th><th className={th}>Total CBM</th>
-              <th className={th}>Peso</th><th className={th}>Total peso</th>
-              <th className={th}>Precio de venta</th><th className={th}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cot.lineas.map((l) => {
-              const c = calcCliente(l);
-              return (
-                <tr key={l.id} className="row-line">
-                  <td className="px-2 py-2"><Thumb src={l.foto} size={44} /></td>
-                  <td className="px-2 py-2"><div className="font-medium">{l.nombre}</div><div className="muted num">{l.codigo}</div></td>
-                  <td className={td}>{l.cantidad}</td>
-                  <td className={td}>{m3(num(l.cbm))} m³</td>
-                  <td className={td}>{m3(c.totalCbm)} m³</td>
-                  <td className={td}>{num(l.peso) > 0 ? kg(num(l.peso)) : "Sin peso"}</td>
-                  <td className={td}>{kg(c.totalPeso)}</td>
-                  <td className={td}>{money(l.precioVenta)}</td>
-                  <td className={`${td} font-semibold`}>{money(c.totalVenta)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot style={{ background: "#E9EFF1", borderTop: "2px solid #142731" }}>
-            <tr>
-              <td colSpan={2} className="px-2 py-3 font-semibold">TOTALES</td>
-              <td className={`${td} font-semibold`}>{t.totalCantidad}</td>
-              <td className={td}>—</td>
-              <td className={`${td} font-semibold`}>{m3(t.totalCbm)} m³</td>
-              <td className={td}>—</td>
-              <td className={`${td} font-semibold`}>{kg(t.totalPeso)}</td>
-              <td className={td}>—</td>
-              <td className={`${td} font-semibold`}>{money(t.totalVenta)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <LineasCotizacion lineas={cot.lineas} interna={false} mostrarVenta={true} />
 
       <Etiqueta
         filas={[
@@ -2407,4 +2317,39 @@ function FichaProducto({ p, acciones, children }) {
                   </div>
                 </article>
   );
+}
+
+
+function LineasCotizacion({ lineas, interna, mostrarVenta }) {
+  return <div className="space-y-3">{lineas.map(l => {
+    const c = interna ? calcLinea(l) : calcCliente(l);
+    const datos = [
+      ["Cantidad", l.cantidad],
+      ["CBM por unidad", `${m3(num(l.cbm))} m³`],
+      ["Total CBM", `${m3(c.totalCbm)} m³`],
+      ["Peso por unidad", num(l.peso) > 0 ? kg(num(l.peso)) : "Sin peso"],
+      ["Total peso", kg(c.totalPeso)],
+      ...(interna ? [
+        ["Precio CBM", money(l.precioCbm)],
+        ["Precio producto", money(l.precioProducto)],
+        ["Total precio producto", money(c.totalProducto)],
+        ["Total precio CBM", money(c.totalPrecioCbm)],
+      ] : [["Precio de venta", money(l.precioVenta)]]),
+      ...(mostrarVenta ? [["Total venta", money(c.totalVenta)]] : []),
+    ];
+    return <article key={l.id} className="paper p-3">
+      <div className="flex gap-3" style={{ alignItems: "center", minWidth: 0 }}>
+        <Thumb src={l.foto} size={56} />
+        <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+          <div className="font-semibold">{l.nombre}</div>
+          <div className="num muted">{l.codigo}</div>
+        </div>
+      </div>
+      <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(155px,100%),1fr))", gap: 10, marginTop: 12 }}>
+        {datos.map(([label, value]) => <div key={label} style={{ minWidth: 0, background: "#F3F6F7", borderRadius: 6, padding: "10px 12px", overflowWrap: "anywhere" }}>
+          <dt className="lbl">{label}</dt><dd className="num font-semibold" style={{ margin: 0 }}>{value}</dd>
+        </div>)}
+      </dl>
+    </article>;
+  })}</div>;
 }

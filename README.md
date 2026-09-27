@@ -55,3 +55,7 @@ El enlace /catalogo ahora usa exactamente el mismo componente de ficha que Produ
 Solo la vista administrativa muestra controles de edición y borrado. Se conservan búsqueda y filtro por categoría. No se añadió contraseña al enlace.
 Actualiza src/App.jsx y worker.js juntos y despliega. No requiere SQL adicional si ya aplicaste las columnas descripcion y categoria; de lo contrario ejecuta AGREGAR_CATEGORIAS.sql incluido.
 Compilación y pruebas simuladas de API correctas. Pendiente de despliegue.
+
+## Cotizaciones internas y clientes sin desplazamiento horizontal
+Ambos detalles ahora usan un cuadro de hasta 1500 px, limitado al ancho disponible. Las tablas de ancho fijo se sustituyeron por fichas adaptables con todos los datos de cada línea. El resumen de totales, imprimir y compartir se conservan. Solo hay desplazamiento vertical del documento cuando su contenido supera la altura de la pantalla, sin barras internas en tablas.
+Actualiza y despliega; no requiere SQL. Compilación de producción verificada.
