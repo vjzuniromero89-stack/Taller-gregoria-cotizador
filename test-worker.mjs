@@ -31,8 +31,8 @@ for(const path of ['/api/productos','/api/productos?id=','/api/productos?id=one%
 console.log('Pruebas de eliminación correctas: fila seleccionada, último producto, permisos, cero filas e ID inválido.');
 // Public catalog excludes internal fields and reads subsequent pages.
 let pages=0;
-globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,cbm,peso,precio_venta,foto');pages++;return Response.json(u.searchParams.get('offset')==='0'?[{id:'public1',nombre:'Producto',precio_venta:20,precio_producto:10,precio_cbm:5}]:[]);};
-r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,200);const catalog=await r.json();assert.equal(catalog[0].precio_venta,20);assert.equal('precio_producto' in catalog[0],false);assert.equal('precio_cbm' in catalog[0],false);assert.equal(pages,2);
+globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,categoria,cbm,peso,precio_venta,foto');pages++;return Response.json(u.searchParams.get('offset')==='0'?[{id:'public1',nombre:'Producto',categoria:'Maquinaria',precio_venta:20,precio_producto:10,precio_cbm:5}]:[]);};
+r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,200);const catalog=await r.json();assert.equal(catalog[0].precio_venta,20);assert.equal(catalog[0].categoria,'Maquinaria');assert.equal('precio_producto' in catalog[0],false);assert.equal('precio_cbm' in catalog[0],false);assert.equal(pages,2);
 globalThis.fetch=async()=>Response.json({message:'internal error'},{status:403});
 r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,503);assert.equal((await r.text()).includes('internal error'),false);
 console.log('Catálogo: paginación, campos públicos y errores verificados.');

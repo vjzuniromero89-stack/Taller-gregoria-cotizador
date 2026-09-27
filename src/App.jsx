@@ -264,7 +264,7 @@ async function sbLoadProductos() {
       id: p.id, codigo: p.codigo || "", nombre: p.nombre || "",
       cbm: p.cbm || 0, peso: p.peso || 0,
       precioCbm: p.precio_cbm || 0, precioProducto: p.precio_producto || 0,
-      precioVenta: p.precio_venta || 0, foto: p.foto || "", descripcion: p.descripcion || "",
+      precioVenta: p.precio_venta || 0, foto: p.foto || "", descripcion: p.descripcion || "", categoria: p.categoria || "Sin categoría",
     }));
   } catch (e) { console.error("Error cargando productos:", e); return null; }
 }
@@ -273,7 +273,7 @@ async function sbSaveProductos(lista) {
     const filas = lista.map((p) => ({
       id: p.id, codigo: p.codigo, nombre: p.nombre,
       cbm: p.cbm, peso: p.peso, precio_cbm: p.precioCbm,
-      precio_producto: p.precioProducto, precio_venta: p.precioVenta, foto: p.foto || "", descripcion: p.descripcion || "",
+      precio_producto: p.precioProducto, precio_venta: p.precioVenta, foto: p.foto || "", descripcion: p.descripcion || "", categoria: p.categoria || "Sin categoría",
     }));
     const res = await fetch("/api/productos", {
       method: "PUT",
@@ -1206,7 +1206,7 @@ function EncabezadoPagina({ icon: Icon, titulo, descripcion }) {
   );
 }
 
-const VACIO = { codigo: "", nombre: "", descripcion: "", cbm: "", peso: "", precioCbm: "", precioProducto: "", precioVenta: "", foto: "" };
+const VACIO = { codigo: "", nombre: "", descripcion: "", categoria: "", cbm: "", peso: "", precioCbm: "", precioProducto: "", precioVenta: "", foto: "" };
 const EMPRESA_POR_DEFECTO = {
   nombre: "Taller Gregoriana",
   contacto: "Taller Mecánico y Lubricentro",
@@ -1294,6 +1294,9 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [creandoCategoria, setCreandoCategoria] = useState(false);
+  const categorias = [...new Set(["General", ...productos.map(p => p.categoria || "Sin categoría"), ...(form.categoria && !creandoCategoria ? [form.categoria] : [])])].sort((a, b) => a.localeCompare(b, "es"));
   const [confirmId, setConfirmId] = useState(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -1305,8 +1308,11 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
     if (productos.some((p) => p.codigo.toLowerCase() === codigo.toLowerCase() && p.id !== editId)) {
       setError(`Ya existe un producto con el código ${codigo}.`); return;
     }
+    const categoriaEscrita = form.categoria.trim().replace(/\s+/g, " ");
+    if (!categoriaEscrita) { setError("Selecciona o escribe una categoría para el producto."); return; }
+    const categoria = categorias.find(c => c.toLocaleLowerCase("es") === categoriaEscrita.toLocaleLowerCase("es")) || categoriaEscrita;
     const item = {
-      id: editId || uid(), codigo, nombre, descripcion: form.descripcion.trim(),
+      id: editId || uid(), codigo, nombre, categoria, descripcion: form.descripcion.trim(),
       cbm: num(form.cbm), peso: num(form.peso), precioCbm: num(form.precioCbm),
       precioProducto: num(form.precioProducto), precioVenta: num(form.precioVenta), foto: form.foto,
     };
@@ -1316,13 +1322,14 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
     setGuardando(false);
     if (ok) {
       avisar(editId ? "Cambios guardados" : "Producto guardado");
-      setForm(VACIO); setEditId(null); setError("");
+      setForm(VACIO); setCreandoCategoria(false); setEditId(null); setError("");
     }
   }
 
   function editar(p) {
+    setCreandoCategoria(false);
     setForm({
-      codigo: p.codigo, nombre: p.nombre, descripcion: p.descripcion || "", cbm: String(p.cbm), peso: p.peso ? String(p.peso) : "",
+      codigo: p.codigo, nombre: p.nombre, descripcion: p.descripcion || "", categoria: p.categoria || "Sin categoría", cbm: String(p.cbm), peso: p.peso ? String(p.peso) : "",
       precioCbm: String(p.precioCbm), precioProducto: String(p.precioProducto),
       precioVenta: p.precioVenta ? String(p.precioVenta) : "", foto: p.foto || "",
     });
@@ -1343,9 +1350,9 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
 
   const filtrados = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return productos;
-    return productos.filter((p) => p.codigo.toLowerCase().includes(s) || p.nombre.toLowerCase().includes(s));
-  }, [productos, q]);
+    return productos.filter(p => (!categoriaFiltro || (p.categoria || "Sin categoría") === categoriaFiltro) &&
+      (!s || p.codigo.toLowerCase().includes(s) || p.nombre.toLowerCase().includes(s)));
+  }, [productos, q, categoriaFiltro]);
 
   return (
     <div className="space-y-6">
@@ -1370,6 +1377,20 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
                 <label className="lbl" htmlFor="p-nombre">Nombre</label>
                 <input id="p-nombre" className="inp" value={form.nombre} onChange={set("nombre")} />
               </div>
+            </div>
+
+            <div>
+              <label className="lbl" htmlFor="p-categoria">Categoría</label>
+              {creandoCategoria ? <input id="p-categoria" className="inp" maxLength={100} value={form.categoria}
+                onChange={set("categoria")} placeholder="Nombre de la nueva categoría" /> :
+                <select id="p-categoria" className="inp" value={form.categoria} onChange={set("categoria")}>
+                  <option value="">Selecciona una categoría</option>
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>}
+              <button type="button" className="btn btn-ghost mt-2" onClick={() => {
+                setCreandoCategoria(v => !v); setForm(f => ({ ...f, categoria: "" }));
+              }}>{creandoCategoria ? "Elegir categoría existente" : "Nueva categoría"}</button>
+              {creandoCategoria && <p className="muted text-sm mt-1">La categoría se guardará junto con el producto.</p>}
             </div>
 
             <div>
@@ -1434,6 +1455,10 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
       <section>
         <div className="section-toolbar">
           <h2 className="cond text-2xl font-semibold">Catálogo <span className="muted font-medium">({productos.length})</span></h2>
+          <select className="inp" style={{ maxWidth: 280 }} aria-label="Filtrar por categoría" value={categoriaFiltro} onChange={e => setCategoriaFiltro(e.target.value)}>
+            <option value="">Todas las categorías</option>
+            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           {productos.length > 0 && (
             <div className="relative w-48">
               <Search size={16} className="absolute left-3 top-1/2 muted" style={{ transform: "translateY(-50%)" }} />
@@ -1465,6 +1490,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
                         <button className="icon-btn" onClick={() => setConfirmId(p.id)} aria-label={`Eliminar ${p.nombre}`}><Trash2 size={17} /></button>
                       </div>
                     </div>
+                    <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>
                     {p.descripcion && <p className="product-description">{p.descripcion}</p>}
                     <div className="product-info-line mt-2">
                       <Dato label="CBM por volumen" value={`${m3(k.vol)} m³`} />
@@ -2329,6 +2355,8 @@ function EnlaceCatalogo({ avisar }) {
 function CatalogoPublico() {
   const [productos, setProductos] = useState([]);
   const [q, setQ] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const categorias = [...new Set(productos.map(p => p.categoria || "Sin categoría"))].sort((a, b) => a.localeCompare(b, "es"));
   const [estado, setEstado] = useState("cargando");
   const [intento, setIntento] = useState(0);
   useEffect(() => {
@@ -2344,7 +2372,7 @@ function CatalogoPublico() {
     })();
     return () => controller.abort();
   }, [intento]);
-  const filtrados = productos.filter(p => `${p.codigo} ${p.nombre}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const filtrados = productos.filter(p => (!categoriaFiltro || (p.categoria || "Sin categoría") === categoriaFiltro) && `${p.codigo} ${p.nombre}`.toLowerCase().includes(q.trim().toLowerCase()));
   return <div className="app"><style>{STYLES}</style>
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px", minHeight: "100vh" }}>
       <EncabezadoPagina icon={Package} titulo="Catálogo de productos" descripcion="Taller Gregoriana" />
@@ -2352,6 +2380,10 @@ function CatalogoPublico() {
         estado === "error" ? <div className="paper p-6 mt-4" role="alert"><p>No pudimos cargar el catálogo. Inténtalo nuevamente.</p><button className="btn btn-primary mt-3" onClick={() => setIntento(i => i + 1)}>Reintentar</button></div> : <>
           <div className="section-toolbar mt-4">
             <p className="muted">{filtrados.length} de {productos.length} productos</p>
+            <select className="inp" style={{ maxWidth: 280 }} aria-label="Filtrar por categoría" value={categoriaFiltro} onChange={e => setCategoriaFiltro(e.target.value)}>
+              <option value="">Todas las categorías</option>
+              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
             <input className="inp" style={{ maxWidth: 360 }} aria-label="Buscar producto" placeholder="Buscar por nombre o código" value={q} onChange={e => setQ(e.target.value)} />
           </div>
           {!productos.length ? <p className="paper p-6 text-center muted">Próximamente encontrarás nuestros productos aquí.</p> :
@@ -2361,6 +2393,7 @@ function CatalogoPublico() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm muted num">{p.codigo}</div>
                 <h2 className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</h2>
+                <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>
                 {p.descripcion && <p className="product-description">{p.descripcion}</p>}
                 <div className="flex gap-4 mt-2" style={{ flexWrap: "wrap" }}>
                   <Dato label="Volumen" value={`${m3(p.cbm)} m³`} />

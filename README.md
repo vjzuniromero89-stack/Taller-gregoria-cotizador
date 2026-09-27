@@ -43,3 +43,9 @@ Las tarjetas de Productos ya no muestran Precio CBM ni Precio de venta. Estos va
 Se añadió Descripción al formulario de creación/edición, al guardado y lectura en Supabase y al catálogo compartido.
 ANTES de desplegar, ejecuta AGREGAR_DESCRIPCION.sql en SQL Editor del proyecto Supabase. Añade una columna de texto sin eliminar ni reemplazar registros y se puede ejecutar nuevamente sin duplicar la columna.
 Después actualiza los archivos y despliega. Prueba editar un producto, añadir descripción, guardar y recargar. Compilación de producción y pruebas simuladas de API correctas. No se aplicó el SQL remoto desde esta sesión.
+
+## Categorías de productos
+Antes de desplegar esta versión, ejecuta AGREGAR_CATEGORIAS.sql en Supabase → SQL Editor. Añade categoria y, si aún falta, descripcion. No borra productos ni modifica permisos.
+En el formulario selecciona una categoría o pulsa Nueva categoría y escribe su nombre. Al pulsar Guardar producto se guarda también su categoría en Supabase. Las categorías disponibles se obtienen de los productos guardados; una categoría sin productos no se conserva como registro independiente.
+Los productos anteriores aparecen como Sin categoría; usa Editar para asignarles una. La lista administrativa y el catálogo para clientes permiten filtrar por categoría y buscar por nombre/código al mismo tiempo.
+Esta versión conserva las correcciones anteriores. Compilación de producción y pruebas simuladas correctas; el SQL y el despliegue remoto siguen pendientes.
