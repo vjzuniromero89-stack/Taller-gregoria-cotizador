@@ -1,36 +1,30 @@
-# Taller Gregoriana – Cotizador CBM
+# Taller Gregoriana — conexión a Supabase
 
-Recuperación basada en los archivos supervivientes del proyecto original:
-- `App.jsx` del 13 de septiembre de 2026.
-- Build compilado `index.html` del 12 de septiembre de 2026.
+## Corrección incluida
+`wrangler.jsonc` incluye SUPABASE_URL=https://vhlwxvzieitgcwxmngua.supabase.co.
+El Worker necesita SUPABASE_URL y SUPABASE_ANON_KEY en tiempo de ejecución. Las variables VITE_ de compilación no configuran el Worker.
+La pantalla actualiza el indicador de nube después de guardar. /api/health comprueba una consulta de lectura real y devuelve los errores de configuración, red o base de datos.
 
-## Ejecutar
-1. `npm install`
-2. Copiar `.env.example` a `.env` y completar `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (Supabase → Project Settings → API).
-3. `npm run dev`
+## Activar en Cloudflare Workers
+1. Sustituye el proyecto por estos archivos y vuelve a desplegar con tu flujo habitual (build: npm run build; deploy: npx wrangler deploy).
+2. Conserva SUPABASE_ANON_KEY en Settings → Runtime variables and secrets → Production. Debe ser la clave anon o publishable del mismo proyecto Supabase. Nunca uses service_role ni sb_secret_: esta aplicación comparte la clave pública con el navegador.
+3. Si configuras todo desde el panel, añade también una variable de texto SUPABASE_URL con https://vhlwxvzieitgcwxmngua.supabase.co y aplica/despliega el cambio.
+4. Abre https://TU-PAGINA/api/health. Debe mostrar ok:true y productosReadable:true. Esto verifica lectura; comprueba escritura guardando un producto y recargando la página.
+5. Si responde 401, comprueba la clave y que pertenece a ese proyecto. Si indica que no existe productos, revisa el esquema. Si devuelve 42501, revisa GRANT y las políticas RLS de esa tabla antes de cambiarlas.
 
-## Base de datos (Supabase)
-La app necesita 4 tablas que todavía no existen en un proyecto nuevo de Supabase:
-`productos`, `cotizaciones_clientes`, `cotizaciones_internas` y `configuracion`.
-Sin ellas, el guardado falla silenciosamente (se cae al respaldo local en el navegador).
+## Base de datos
+Los archivos SQL originales se conservan como referencia, sin aplicarlos. Sus políticas permiten acceso anónimo de lectura y escritura a todos los registros. No los ejecutes como solución genérica de permisos en una base existente: hay que comprobar el acceso deseado del taller primero.
+Documentación: https://supabase.com/docs/guides/api/securing-your-api
 
-Para crearlas:
-1. Entra a tu proyecto en supabase.com → **SQL Editor** → **New query**.
-2. Pega el contenido completo de `MIGRACION.sql` (o `supabase/migrations/20260924000000_init_schema.sql`, es el mismo archivo).
-3. Dale **Run**.
+## Desarrollo local
+Crea .dev.vars con SUPABASE_URL y SUPABASE_ANON_KEY; no publiques ese archivo. Ejecuta npm ci y npm run cf:dev. npm run dev solo inicia Vite y no proporciona /api/productos.
 
-Esto crea las tablas con Row Level Security activado y una política que permite
-leer/escribir con la anon key, porque la app no tiene login propio. Si más
-adelante agregas autenticación, conviene ajustar esas políticas para exigir
-un usuario logueado.
+## Validación realizada
+node test-worker.mjs: configuración ausente, consulta de diagnóstico, guardado y lectura simulados, errores de permisos, error de red y clave publishable.
+No se verificó la base real ni se desplegaron cambios: falta acceso al proyecto y la URL de la página publicada.
 
-Si usas Supabase CLI en vez del editor web: `supabase db push` (usa el archivo
-en `supabase/migrations/`).
+## Corrección de eliminación
+El botón Eliminar ahora envía DELETE /api/productos?id=ID. El Worker elimina exclusivamente ese ID en Supabase y comprueba que la base devuelva la fila eliminada. La interfaz y el respaldo local se actualizan después de la confirmación. Los errores de permisos se muestran sin ocultar el producto.
 
-## Desplegar
-Build command: `npm run build`
-Output directory: `dist`
-
-Recuerda configurar `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` como variables
-de entorno de build en Cloudflare Workers (Settings → Variables), no solo en tu
-`.env` local — si faltan ahí, el build de producción sale sin conexión a Supabase.
+Para aplicar esta corrección, actualiza worker.js y src/App.jsx juntos (o sustituye el proyecto completo) y vuelve a compilar/desplegar. Las variables de Supabase se mantienen. No requiere ejecutar SQL.
+Prueba tras desplegar: crea un producto de prueba, elimínalo y comprueba su ausencia en Table Editor → productos y después de recargar la página. Las pruebas automatizadas usan Supabase simulado; el borrado real aún debe verificarse en tu despliegue.

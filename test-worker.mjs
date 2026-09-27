@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import worker from './worker.js';
+const env = { SUPABASE_URL: 'https://vhlwxvzieitgcwxmngua.supabase.co', SUPABASE_ANON_KEY: 'test-anon' };
+const req = (path, method='GET', body) => new Request('https://example.com'+path,{method,...(body ? {body:JSON.stringify(body)} : {})});
+let r = await worker.fetch(req('/api/productos','PUT',[{id:'test'}]),{});
+assert.equal(r.status,503); assert.match((await r.json()).error,/SUPABASE_URL/);
+r = await worker.fetch(req('/api/health'),{}); assert.equal((await r.json()).ok,false);
+let rows=[];
+globalThis.fetch=async(url,init)=>{ assert.ok(url.startsWith(env.SUPABASE_URL+'/rest/v1/productos')); if(init.method==='POST') {rows=JSON.parse(init.body); assert.equal(init.headers.Prefer,'resolution=merge-duplicates,return=representation');} return Response.json(rows); };
+r=await worker.fetch(req('/api/productos','PUT',[{id:'test',nombre:'Prueba'}]),env); assert.equal((await r.json()).saved,1);
+r=await worker.fetch(req('/api/productos'),env); assert.equal((await r.json())[0].nombre,'Prueba');
+r=await worker.fetch(req('/api/health'),env); assert.equal((await r.json()).productosReadable,true);
+globalThis.fetch=async()=>Response.json({code:'42501',message:'permission denied for table productos'},{status:403});
+r=await worker.fetch(req('/api/productos','PUT',[{id:'test'}]),env); assert.equal(r.status,403); assert.equal((await r.json()).error.code,'42501');
+globalThis.fetch=async()=>{throw new Error('network');};
+r=await worker.fetch(req('/api/productos','PUT',[{id:'test'}]),env); assert.equal(r.status,502);
+globalThis.fetch=async(url,init)=>{assert.equal(init.headers.authorization,undefined);assert.equal(init.headers.apikey,'sb_publishable_test');return Response.json([]);};
+r=await worker.fetch(req('/api/productos'),{...env,SUPABASE_ANON_KEY:'sb_publishable_test'}); assert.equal(r.status,200);
+console.log('8 comprobaciones correctas (Supabase simulado; sin modificar datos reales).');
+// Deletion regression checks: selected row only, final row, denied access, zero affected rows.
+rows=[{id:'one'},{id:'two'}];
+globalThis.fetch=async(url,init)=>{const u=new URL(url); if(init.method==='DELETE'){const id=u.searchParams.get('id').slice(3);const deleted=rows.filter(p=>p.id===id);rows=rows.filter(p=>p.id!==id);return Response.json(deleted);}return Response.json(rows);};
+r=await worker.fetch(req('/api/productos?id=one','DELETE'),env);assert.equal((await r.json()).deleted,'one');
+r=await worker.fetch(req('/api/productos'),env);assert.deepEqual(await r.json(),[{id:'two'}]);
+r=await worker.fetch(req('/api/productos?id=two','DELETE'),env);assert.equal((await r.json()).ok,true);assert.deepEqual(rows,[]);
+r=await worker.fetch(req('/api/productos?id=two','DELETE'),env);assert.equal(r.status,409);
+globalThis.fetch=async()=>Response.json({code:'42501'},{status:403});
+r=await worker.fetch(req('/api/productos?id=one','DELETE'),env);assert.equal(r.status,403);
+globalThis.fetch=()=>{throw new Error('Must not call Supabase for invalid IDs');};
+for(const path of ['/api/productos','/api/productos?id=','/api/productos?id=one%26id=neq.two']){r=await worker.fetch(req(path,'DELETE'),env);assert.equal(r.status,400);}
+console.log('Pruebas de eliminación correctas: fila seleccionada, último producto, permisos, cero filas e ID inválido.');

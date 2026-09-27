@@ -7,7 +7,7 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 function sbHeaders(env, extra = {}) {
   return {
     apikey: env.SUPABASE_ANON_KEY,
-    authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+    ...(env.SUPABASE_ANON_KEY.startsWith("sb_publishable_") ? {} : { authorization: `Bearer ${env.SUPABASE_ANON_KEY}` }),
     "content-type": "application/json",
     ...extra,
   };
@@ -15,13 +15,19 @@ function sbHeaders(env, extra = {}) {
 
 async function sbRequest(env, path, init = {}) {
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-    return { ok: false, status: 500, error: "Supabase runtime variables are missing" };
+    const missing = ["SUPABASE_URL", "SUPABASE_ANON_KEY"].filter(name => !env[name]);
+    return { ok: false, status: 503, error: `Falta configurar ${missing.join(" y ")} en Cloudflare → Settings → Runtime variables and secrets. Guarda y vuelve a desplegar.` };
   }
   const base = env.SUPABASE_URL.replace(/\/$/, "");
-  const res = await fetch(`${base}/rest/v1/${path}`, {
+  let res;
+  try {
+    res = await fetch(`${base}/rest/v1/${path}`, {
     ...init,
     headers: sbHeaders(env, init.headers || {}),
   });
+  } catch {
+    return { ok: false, status: 502, error: "No se pudo conectar con Supabase. Comprueba SUPABASE_URL y que el proyecto esté activo." };
+  }
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -40,16 +46,33 @@ export default {
     }
 
     if (url.pathname === "/api/health") {
+      const result = await sbRequest(env, "productos?select=id&limit=1");
       return json({
-        ok: true,
+        ok: result.ok,
         service: "taller-gregoria-cotizador",
         supabaseConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_ANON_KEY),
-      });
+        productosReadable: result.ok,
+        ...(result.ok ? {} : { error: result.error }),
+      }, result.ok ? 200 : result.status);
     }
 
     if (url.pathname === "/api/productos" && request.method === "GET") {
       const r = await sbRequest(env, "productos?select=*&order=creado.desc");
       return r.ok ? json(r.data || []) : json({ ok: false, error: r.error }, r.status);
+    }
+
+    if (url.pathname === "/api/productos" && request.method === "DELETE") {
+      const id = url.searchParams.get("id");
+      if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return json({ ok: false, error: "ID de producto inválido" }, 400);
+      const result = await sbRequest(env, `productos?id=eq.${encodeURIComponent(id)}&select=id`, {
+        method: "DELETE",
+        headers: { Prefer: "return=representation" },
+      });
+      if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+      if (!Array.isArray(result.data) || !result.data.some(row => row.id === id)) {
+        return json({ ok: false, error: "No se eliminó el producto. Puede que ya no exista o que falten permisos SELECT/DELETE en Supabase." }, 409);
+      }
+      return json({ ok: true, deleted: id });
     }
 
     if (url.pathname === "/api/productos" && request.method === "PUT") {

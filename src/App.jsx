@@ -284,7 +284,7 @@ async function sbSaveProductos(lista) {
       return { ok: false, error: typeof detail === "string" ? detail : JSON.stringify(detail) };
     }
     return { ok: true };
-  } catch (e) { console.error("Error guardando productos:", e); return false; }
+  } catch (e) { console.error("Error guardando productos:", e); return { ok: false, error: "No se pudo contactar con el servidor. Comprueba la conexión y el despliegue del Worker." }; }
 }
 
 async function sbLoadCotizacionesClientes() {
@@ -1286,7 +1286,7 @@ function EmpresaCard({ empresa, guardarEmpresa, avisar }) {
   );
 }
 
-function ProductosView({ productos, guardarProductos, avisar, empresa, guardarEmpresa }) {
+function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, empresa, guardarEmpresa }) {
   const [form, setForm] = useState(VACIO);
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
@@ -1328,8 +1328,12 @@ function ProductosView({ productos, guardarProductos, avisar, empresa, guardarEm
   }
 
   async function eliminar(id) {
-    const ok = await guardarProductos(productos.filter((p) => p.id !== id));
-    if (ok) avisar("Producto eliminado");
+    if (guardando) return;
+    setGuardando(true);
+    const ok = await eliminarProducto(id);
+    setGuardando(false);
+    if (!ok) return;
+    avisar("Producto eliminado");
     setConfirmId(null);
     if (editId === id) { setEditId(null); setForm(VACIO); }
   }
@@ -1465,7 +1469,7 @@ function ProductosView({ productos, guardarProductos, avisar, empresa, guardarEm
                       <div className="flex items-center gap-2 mt-3">
                         <span className="text-sm flex-1">¿Eliminar este producto?</span>
                         <button className="btn btn-ghost text-sm" style={{ padding: "6px 12px" }} onClick={() => setConfirmId(null)}>No</button>
-                        <button className="btn btn-danger-solid text-sm" style={{ padding: "6px 12px" }} onClick={() => eliminar(p.id)}>Eliminar</button>
+                        <button className="btn btn-danger-solid text-sm" style={{ padding: "6px 12px" }} disabled={guardando} onClick={() => eliminar(p.id)}>{guardando ? "Eliminando…" : "Eliminar"}</button>
                       </div>
                     )}
                   </div>
@@ -2097,6 +2101,7 @@ export default function App() {
     (async () => {
       let p, ci, cc, em;
       p = await sbLoadProductos();
+      setOnline(p !== null);
       if (supabase) {
         [ci, cc, em] = await Promise.all([
           sbLoadCotizacionesClientes(), sbLoadCotizacionesInternas(), sbLoadEmpresa(),
@@ -2136,11 +2141,31 @@ export default function App() {
     setProductos(data);
     await localSave("productos", data);
     const resultado = await sbSaveProductos(data);
+    setOnline(Boolean(resultado?.ok));
     if (!resultado?.ok) {
       avisar(`Supabase: ${resultado?.error || "No se pudo guardar el producto."}`, "error");
       return false;
     }
     return true;
+  };
+  const eliminarProducto = async (id) => {
+    try {
+      const res = await fetch(`/api/productos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result.ok || result.deleted !== id) {
+        const detail = result.error?.message || result.error || `HTTP ${res.status}`;
+        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      }
+      const lista = productos.filter(p => p.id !== id);
+      setProductos(lista);
+      await localSave("productos", lista);
+      setOnline(true);
+      return true;
+    } catch (error) {
+      setOnline(false);
+      avisar(`No se pudo eliminar: ${error.message}`, "error");
+      return false;
+    }
   };
   const guardarInternas = async (data) => {
     setInternas(data);
@@ -2232,7 +2257,7 @@ export default function App() {
                     empresa={empresa} irA={cambiarTab} />
                 )}
                 {tab === "productos" && (
-                  <ProductosView productos={productos} guardarProductos={guardarProductos} avisar={avisar}
+                  <ProductosView productos={productos} guardarProductos={guardarProductos} eliminarProducto={eliminarProducto} avisar={avisar}
                     empresa={empresa} guardarEmpresa={guardarEmpresa} />
                 )}
                 {tab === "internas" && (
