@@ -76,6 +76,27 @@ const STYLES = `
 .product-info-line > div:nth-child(4) { background:#FFF4CC; border:2px solid #F2B705; }
 .product-info-line > div:nth-child(4) .lbl,
 .product-info-line > div:nth-child(4) .num { color:#7A5900; font-weight:700; }
+.quote-dialog { font-size:13px; }
+.quote-dialog > .p-4 { padding:10px 14px; }
+.quote-dialog > .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top:10px; }
+.quote-dialog .label-stripe { height:5px; }
+.quote-dialog .label-block > .p-4 { padding:10px 12px; }
+.quote-dialog .label-block dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px 16px; font-size:12px; }
+.quote-dialog .label-block dl > div { padding:2px 0; min-width:0; align-items:baseline; }
+.quote-dialog .label-block dt { overflow-wrap:anywhere; }
+.quote-dialog .label-block dd { margin:0; }
+.quote-dialog .label-block .mt-3 { margin-top:8px; padding-top:8px; align-items:center; }
+.quote-dialog .label-block .cond.num { font-size:26px !important; }
+.quote-dialog .btn { padding:7px 12px; font-size:13px; }
+.quote-dialog .quote-line { padding:8px 10px; }
+.quote-dialog .quote-line dl { gap:5px !important; margin-top:7px !important; }
+.quote-dialog .quote-line dl > div { padding:6px 8px !important; }
+.quote-dialog .quote-line .lbl { font-size:11px; margin-bottom:2px; }
+@media (max-width:640px) {
+  .quote-dialog .label-block dl { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .quote-dialog .label-block dl > div { display:block; }
+  .quote-dialog .label-block .cond.num { font-size:23px !important; }
+}
 .product-model-label { display:block; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#5B6B75; }
 .product-model { font-family:"Barlow Condensed",system-ui,sans-serif; font-size:clamp(28px,5vw,36px); line-height:1.15; font-weight:800; color:#14222B; overflow-wrap:anywhere; margin:2px 0 8px; }
 .product-description { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin-top:10px; color:#5B6B75; }
@@ -1090,7 +1111,7 @@ function ModalShell({ titulo, subtitulo, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50" style={{ background: "rgba(20,34,43,.55)", overflowY: "auto", padding: "12px" }} onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={titulo}
-        className="w-full" style={{ background: "#fff", borderRadius: 12, maxWidth: 1500, margin: "0 auto", minWidth: 0 }}
+        className="w-full quote-dialog" style={{ background: "#fff", borderRadius: 12, maxWidth: 1100, margin: "0 auto", minWidth: 0 }}
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between p-4 sticky top-0 z-10" style={{ background: "#fff", borderBottom: "1px solid #E1E7EA" }}>
           <div>
@@ -2337,15 +2358,15 @@ function LineasCotizacion({ lineas, interna, mostrarVenta }) {
       ] : [["Precio de venta", money(l.precioVenta)]]),
       ...(mostrarVenta ? [["Total venta", money(c.totalVenta)]] : []),
     ];
-    return <article key={l.id} className="paper p-3">
+    return <article key={l.id} className="paper p-3 quote-line">
       <div className="flex gap-3" style={{ alignItems: "center", minWidth: 0 }}>
-        <Thumb src={l.foto} size={56} />
+        <Thumb src={l.foto} size={40} />
         <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
           <div className="font-semibold">{l.nombre}</div>
           <div className="num muted">{l.codigo}</div>
         </div>
       </div>
-      <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(155px,100%),1fr))", gap: 10, marginTop: 12 }}>
+      <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(175px,100%),1fr))", gap: 10, marginTop: 12 }}>
         {datos.map(([label, value]) => <div key={label} style={{ minWidth: 0, background: "#F3F6F7", borderRadius: 6, padding: "10px 12px", overflowWrap: "anywhere" }}>
           <dt className="lbl">{label}</dt><dd className="num font-semibold" style={{ margin: 0 }}>{value}</dd>
         </div>)}
