@@ -1475,30 +1475,11 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
         ) : (
           <div className="space-y-3">
             {filtrados.map((p) => {
-              const k = cbmCobro(p.cbm, p.peso);
               return (
-                <article key={p.id} className="paper p-3 flex gap-3 product-card">
-                  <Thumb src={p.foto} size={76} />
-                  <div className="flex-1 min-w-0 product-content">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-sm muted num">{p.codigo}</div>
-                        <div className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</div>
-                      </div>
-                      <div className="flex flex-shrink-0">
-                        <button className="icon-btn" onClick={() => editar(p)} aria-label={`Editar ${p.nombre}`}><Pencil size={17} /></button>
-                        <button className="icon-btn" onClick={() => setConfirmId(p.id)} aria-label={`Eliminar ${p.nombre}`}><Trash2 size={17} /></button>
-                      </div>
-                    </div>
-                    <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>
-                    {p.descripcion && <p className="product-description">{p.descripcion}</p>}
-                    <div className="product-info-line mt-2">
-                      <Dato label="CBM por volumen" value={`${m3(k.vol)} m³`} />
-                      <Dato label="CBM por peso" value={`${m3(k.porPeso)} m³`} />
-                      <Dato label="Peso" value={p.peso ? kg(p.peso) : "Sin peso"} cls={p.peso ? "" : "muted"} />
-                      <Dato label="CBM a cobrar" value={`${m3(k.cobrable)} m³, por ${k.por}`} strong />
-                      <Dato label="Precio producto" value={money(p.precioProducto)} strong />
-                    </div>
+                <FichaProducto key={p.id} p={p} acciones={<>
+                  <button className="icon-btn" onClick={() => editar(p)} aria-label={`Editar ${p.nombre}`}><Pencil size={17} /></button>
+                  <button className="icon-btn" onClick={() => setConfirmId(p.id)} aria-label={`Eliminar ${p.nombre}`}><Trash2 size={17} /></button>
+                </>}>
                     {confirmId === p.id && (
                       <div className="flex items-center gap-2 mt-3">
                         <span className="text-sm flex-1">¿Eliminar este producto?</span>
@@ -1506,8 +1487,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
                         <button className="btn btn-danger-solid text-sm" style={{ padding: "6px 12px" }} disabled={guardando} onClick={() => eliminar(p.id)}>{guardando ? "Eliminando…" : "Eliminar"}</button>
                       </div>
                     )}
-                  </div>
-                </article>
+                </FichaProducto>
               );
             })}
           </div>
@@ -2342,8 +2322,8 @@ function EnlaceCatalogo({ avisar }) {
     catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
   };
   return <section className="paper p-4">
-    <h2 className="cond text-2xl font-semibold">Compartir productos con clientes</h2>
-    <p className="muted text-sm mt-1">Fotos, códigos, medidas y precios de venta en un solo enlace.</p>
+    <h2 className="cond text-2xl font-semibold">Compartir productos con mi socio</h2>
+    <p className="muted text-sm mt-1">Comparte las mismas fichas y datos que ves en Productos.</p>
     <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
       <input className="inp" style={{ flex: "1 1 240px" }} aria-label="Enlace del catálogo" readOnly value={enlace} onFocus={e => e.target.select()} />
       <button className="btn btn-primary" onClick={copiar}><Share2 size={17} />Copiar enlace</button>
@@ -2388,20 +2368,7 @@ function CatalogoPublico() {
           </div>
           {!productos.length ? <p className="paper p-6 text-center muted">Próximamente encontrarás nuestros productos aquí.</p> :
             !filtrados.length ? <p className="paper p-6 text-center muted">No hay productos que coincidan con tu búsqueda.</p> :
-            <div className="space-y-3">{filtrados.map(p => <article className="paper p-3 flex gap-3" key={p.id}>
-              <Thumb src={p.foto} size={76} />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm muted num">{p.codigo}</div>
-                <h2 className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</h2>
-                <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>
-                {p.descripcion && <p className="product-description">{p.descripcion}</p>}
-                <div className="flex gap-4 mt-2" style={{ flexWrap: "wrap" }}>
-                  <Dato label="Volumen" value={`${m3(p.cbm)} m³`} />
-                  <Dato label="Peso" value={p.peso ? kg(p.peso) : "Consultar"} />
-                  <Dato label="Precio de venta" value={p.precio_venta ? money(p.precio_venta) : "Consultar precio"} strong />
-                </div>
-              </div>
-            </article>)}</div>}
+            <div className="space-y-3">{filtrados.map(p => <FichaProducto key={p.id} p={{ ...p, precioProducto: p.precio_producto }} />)}</div>}
         </>}
     </main>
   </div>;
@@ -2409,4 +2376,32 @@ function CatalogoPublico() {
 
 export default function App() {
   return window.location.pathname.replace(/\/+$/, "") === "/catalogo" ? <CatalogoPublico /> : <AdminApp />;
+}
+
+function FichaProducto({ p, acciones, children }) {
+  const k = cbmCobro(p.cbm, p.peso);
+  return (
+                <article className="paper p-3 flex gap-3 product-card">
+                  <Thumb src={p.foto} size={76} />
+                  <div className="flex-1 min-w-0 product-content">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm muted num">{p.codigo}</div>
+                        <div className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</div>
+                      </div>
+                      {acciones && <div className="flex flex-shrink-0">{acciones}</div>}
+                    </div>
+                    <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>
+                    {p.descripcion && <p className="product-description">{p.descripcion}</p>}
+                    <div className="product-info-line mt-2">
+                      <Dato label="CBM por volumen" value={`${m3(k.vol)} m³`} />
+                      <Dato label="CBM por peso" value={`${m3(k.porPeso)} m³`} />
+                      <Dato label="Peso" value={p.peso ? kg(p.peso) : "Sin peso"} cls={p.peso ? "" : "muted"} />
+                      <Dato label="CBM a cobrar" value={`${m3(k.cobrable)} m³, por ${k.por}`} strong />
+                      <Dato label="Precio producto" value={money(p.precioProducto)} strong />
+                    </div>
+                    {children}
+                  </div>
+                </article>
+  );
 }
