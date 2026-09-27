@@ -28,3 +28,12 @@ El botón Eliminar ahora envía DELETE /api/productos?id=ID. El Worker elimina e
 
 Para aplicar esta corrección, actualiza worker.js y src/App.jsx juntos (o sustituye el proyecto completo) y vuelve a compilar/desplegar. Las variables de Supabase se mantienen. No requiere ejecutar SQL.
 Prueba tras desplegar: crea un producto de prueba, elimínalo y comprueba su ausencia en Table Editor → productos y después de recargar la página. Las pruebas automatizadas usan Supabase simulado; el borrado real aún debe verificarse en tu despliegue.
+
+## Enlace de catálogo para clientes
+En Productos aparece «Compartir productos con clientes», con «Copiar enlace» y «Ver catálogo».
+La dirección es https://taller-gregoria-cotizador.vjzuniromero89.workers.dev/catalogo y estará disponible después de desplegar esta versión.
+Muestra foto, código, nombre, volumen, peso y precio de venta. No incluye formularios de edición, borrado, cotizaciones ni costos internos en esa vista. Tiene buscador, estado vacío y opción de reintentar si falla la conexión.
+El catálogo carga los productos actuales de Supabase al abrirlo; el enlace no cambia cuando agregas productos. No necesita cambios SQL.
+Actualiza src/App.jsx y worker.js juntos, compila y despliega. Se conservan las correcciones anteriores de guardado y borrado y la URL de Supabase.
+La ruta /catalogo es una vista pública de solo lectura; no añade autenticación a la aplicación administrativa existente.
+Validación: compilación de producción con Vite correcta y pruebas de API simuladas para paginación, exclusión de costos y errores. Pendiente de publicar y comprobar en el dominio real.

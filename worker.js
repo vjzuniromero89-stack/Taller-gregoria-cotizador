@@ -56,6 +56,20 @@ export default {
       }, result.ok ? 200 : result.status);
     }
 
+    if (url.pathname === "/api/catalogo" && request.method === "GET") {
+      const productos = [];
+      // Stable ordering and pagination avoid truncating large catalogs.
+      for (let offset = 0; ; ) {
+        const r = await sbRequest(env, `productos?select=id,codigo,nombre,cbm,peso,precio_venta,foto&order=id.asc&limit=500&offset=${offset}`);
+        if (!r.ok) return json({ ok: false, error: "El catálogo no está disponible temporalmente." }, 503);
+        if (!Array.isArray(r.data)) return json({ ok: false, error: "Respuesta de catálogo inválida." }, 502);
+        if (!r.data.length) break;
+        productos.push(...r.data.map(({ id, codigo, nombre, cbm, peso, precio_venta, foto }) => ({ id, codigo, nombre, cbm, peso, precio_venta, foto })));
+        offset += r.data.length;
+      }
+      return json(productos);
+    }
+
     if (url.pathname === "/api/productos" && request.method === "GET") {
       const r = await sbRequest(env, "productos?select=*&order=creado.desc");
       return r.ok ? json(r.data || []) : json({ ok: false, error: r.error }, r.status);

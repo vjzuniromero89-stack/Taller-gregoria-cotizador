@@ -1348,6 +1348,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
     <div className="space-y-6">
       <EncabezadoPagina icon={Package} titulo="Productos"
         descripcion="Administra el catálogo, los costos, el peso y el CBM facturable de cada producto." />
+      <EnlaceCatalogo avisar={avisar} />
       <EmpresaCard empresa={empresa} guardarEmpresa={guardarEmpresa} avisar={avisar} />
 
       <section className="form-card">
@@ -2085,7 +2086,7 @@ const TABS = [
   { id: "clientes", label: "Cotizaciones clientes", icon: Users },
 ];
 
-export default function App() {
+function AdminApp() {
   const [tab, setTab] = useState("inicio");
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [productos, setProductos] = useState([]);
@@ -2298,4 +2299,73 @@ export default function App() {
       )}
     </div>
   );
+}
+
+
+function EnlaceCatalogo({ avisar }) {
+  const enlace = `${window.location.origin}/catalogo`;
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(enlace); avisar("Enlace del catálogo copiado"); }
+    catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
+  };
+  return <section className="paper p-4">
+    <h2 className="cond text-2xl font-semibold">Compartir productos con clientes</h2>
+    <p className="muted text-sm mt-1">Fotos, códigos, medidas y precios de venta en un solo enlace.</p>
+    <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
+      <input className="inp" style={{ flex: "1 1 240px" }} aria-label="Enlace del catálogo" readOnly value={enlace} onFocus={e => e.target.select()} />
+      <button className="btn btn-primary" onClick={copiar}><Share2 size={17} />Copiar enlace</button>
+      <a className="btn btn-ghost" href={enlace} target="_blank" rel="noopener noreferrer"><Eye size={17} />Ver catálogo</a>
+    </div>
+  </section>;
+}
+
+function CatalogoPublico() {
+  const [productos, setProductos] = useState([]);
+  const [q, setQ] = useState("");
+  const [estado, setEstado] = useState("cargando");
+  const [intento, setIntento] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    setEstado("cargando");
+    (async () => {
+      try {
+        const res = await fetch("/api/catalogo", { cache: "no-store", signal: controller.signal });
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data)) throw new Error("Catálogo no disponible");
+        setProductos(data); setEstado("listo");
+      } catch (error) { if (error.name !== "AbortError") setEstado("error"); }
+    })();
+    return () => controller.abort();
+  }, [intento]);
+  const filtrados = productos.filter(p => `${p.codigo} ${p.nombre}`.toLowerCase().includes(q.trim().toLowerCase()));
+  return <div className="app"><style>{STYLES}</style>
+    <main style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px", minHeight: "100vh" }}>
+      <EncabezadoPagina icon={Package} titulo="Catálogo de productos" descripcion="Taller Gregoriana" />
+      {estado === "cargando" ? <p role="status" className="paper p-6 mt-4">Cargando productos…</p> :
+        estado === "error" ? <div className="paper p-6 mt-4" role="alert"><p>No pudimos cargar el catálogo. Inténtalo nuevamente.</p><button className="btn btn-primary mt-3" onClick={() => setIntento(i => i + 1)}>Reintentar</button></div> : <>
+          <div className="section-toolbar mt-4">
+            <p className="muted">{filtrados.length} de {productos.length} productos</p>
+            <input className="inp" style={{ maxWidth: 360 }} aria-label="Buscar producto" placeholder="Buscar por nombre o código" value={q} onChange={e => setQ(e.target.value)} />
+          </div>
+          {!productos.length ? <p className="paper p-6 text-center muted">Próximamente encontrarás nuestros productos aquí.</p> :
+            !filtrados.length ? <p className="paper p-6 text-center muted">No hay productos que coincidan con tu búsqueda.</p> :
+            <div className="space-y-3">{filtrados.map(p => <article className="paper p-3 flex gap-3" key={p.id}>
+              <Thumb src={p.foto} size={76} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm muted num">{p.codigo}</div>
+                <h2 className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</h2>
+                <div className="flex gap-4 mt-2" style={{ flexWrap: "wrap" }}>
+                  <Dato label="Volumen" value={`${m3(p.cbm)} m³`} />
+                  <Dato label="Peso" value={p.peso ? kg(p.peso) : "Consultar"} />
+                  <Dato label="Precio de venta" value={p.precio_venta ? money(p.precio_venta) : "Consultar precio"} strong />
+                </div>
+              </div>
+            </article>)}</div>}
+        </>}
+    </main>
+  </div>;
+}
+
+export default function App() {
+  return window.location.pathname.replace(/\/+$/, "") === "/catalogo" ? <CatalogoPublico /> : <AdminApp />;
 }
