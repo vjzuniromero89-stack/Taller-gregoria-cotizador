@@ -76,6 +76,8 @@ const STYLES = `
 .product-info-line > div:nth-child(4) { background:#FFF4CC; border:2px solid #F2B705; }
 .product-info-line > div:nth-child(4) .lbl,
 .product-info-line > div:nth-child(4) .num { color:#7A5900; font-weight:700; }
+.product-model-label { display:block; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#5B6B75; }
+.product-model { font-family:"Barlow Condensed",system-ui,sans-serif; font-size:clamp(28px,5vw,36px); line-height:1.15; font-weight:800; color:#14222B; overflow-wrap:anywhere; margin:2px 0 8px; }
 .product-description { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin-top:10px; color:#5B6B75; }
 @media (max-width:480px) {
   .product-card { flex-wrap:wrap; }
@@ -2386,7 +2388,8 @@ function FichaProducto({ p, acciones, children }) {
                   <div className="flex-1 min-w-0 product-content">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="text-sm muted num">{p.codigo}</div>
+                        <span className="product-model-label">Modelo</span>
+                        <div className="product-model num">{p.codigo}</div>
                         <div className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</div>
                       </div>
                       {acciones && <div className="flex flex-shrink-0">{acciones}</div>}
