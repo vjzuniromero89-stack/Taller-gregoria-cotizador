@@ -37,3 +37,9 @@ El catálogo carga los productos actuales de Supabase al abrirlo; el enlace no c
 Actualiza src/App.jsx y worker.js juntos, compila y despliega. Se conservan las correcciones anteriores de guardado y borrado y la URL de Supabase.
 La ruta /catalogo es una vista pública de solo lectura; no añade autenticación a la aplicación administrativa existente.
 Validación: compilación de producción con Vite correcta y pruebas de API simuladas para paginación, exclusión de costos y errores. Pendiente de publicar y comprobar en el dominio real.
+
+## Tarjetas de producto y descripción
+Las tarjetas de Productos ya no muestran Precio CBM ni Precio de venta. Estos valores se conservan en el formulario y en las cotizaciones. Los datos restantes se distribuyen en una cuadrícula adaptable sin desplazamiento horizontal. Los nombres y descripciones largos se ajustan en varias líneas.
+Se añadió Descripción al formulario de creación/edición, al guardado y lectura en Supabase y al catálogo compartido.
+ANTES de desplegar, ejecuta AGREGAR_DESCRIPCION.sql en SQL Editor del proyecto Supabase. Añade una columna de texto sin eliminar ni reemplazar registros y se puede ejecutar nuevamente sin duplicar la columna.
+Después actualiza los archivos y despliega. Prueba editar un producto, añadir descripción, guardar y recargar. Compilación de producción y pruebas simuladas de API correctas. No se aplicó el SQL remoto desde esta sesión.

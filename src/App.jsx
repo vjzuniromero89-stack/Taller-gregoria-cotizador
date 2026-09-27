@@ -70,14 +70,17 @@ const STYLES = `
 }
 @media (prefers-reduced-motion: reduce) { .dollar-rain { display:none; } }
 
-.product-info-line { display:flex; align-items:stretch; gap:0; overflow-x:auto;
-  border:1px solid #E1E7EA; border-radius:8px; scrollbar-width:thin; }
-.product-info-line > div { flex:0 0 145px; min-width:145px; padding:10px 12px; border-right:1px solid #E1E7EA; background:#fff; }
-.product-info-line > div:last-child { border-right:0; }
-.product-info-line > div:nth-child(4) { background:#FFF4CC; border:2px solid #F2B705;
-  box-shadow: inset 0 0 0 1px rgba(242,183,5,.18); margin:-1px 0; }
+.product-info-line { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr)); gap:0; width:100%;
+  border:1px solid #E1E7EA; border-radius:8px; }
+.product-info-line > div { min-width:0; padding:10px 12px; border:1px solid #E1E7EA; background:#fff; overflow-wrap:anywhere; }
+.product-info-line > div:nth-child(4) { background:#FFF4CC; border:2px solid #F2B705; }
 .product-info-line > div:nth-child(4) .lbl,
 .product-info-line > div:nth-child(4) .num { color:#7A5900; font-weight:700; }
+.product-description { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin-top:10px; color:#5B6B75; }
+@media (max-width:480px) {
+  .product-card { flex-wrap:wrap; }
+  .product-card > .product-content { flex:1 1 100%; }
+}
 
 .layout { display:flex; min-height:100vh; }
 .sidebar { background:#14222B; color:#AFC0C8; width:230px; flex-shrink:0;
@@ -214,7 +217,7 @@ const STYLES = `
   .section-toolbar { align-items:stretch; flex-direction:column; }
   .section-toolbar .relative { width:100%; }
   .paper, .form-card, .label-block { max-width:100%; }
-  .product-info-line { max-width:calc(100vw - 132px); }
+  .product-info-line { max-width:100%; }
   .form-grid-cod, .form-grid-3, .form-grid-2 { grid-template-columns:1fr; }
   .form-card { padding:20px 16px 24px; }
 }
@@ -261,7 +264,7 @@ async function sbLoadProductos() {
       id: p.id, codigo: p.codigo || "", nombre: p.nombre || "",
       cbm: p.cbm || 0, peso: p.peso || 0,
       precioCbm: p.precio_cbm || 0, precioProducto: p.precio_producto || 0,
-      precioVenta: p.precio_venta || 0, foto: p.foto || "",
+      precioVenta: p.precio_venta || 0, foto: p.foto || "", descripcion: p.descripcion || "",
     }));
   } catch (e) { console.error("Error cargando productos:", e); return null; }
 }
@@ -270,7 +273,7 @@ async function sbSaveProductos(lista) {
     const filas = lista.map((p) => ({
       id: p.id, codigo: p.codigo, nombre: p.nombre,
       cbm: p.cbm, peso: p.peso, precio_cbm: p.precioCbm,
-      precio_producto: p.precioProducto, precio_venta: p.precioVenta, foto: p.foto || "",
+      precio_producto: p.precioProducto, precio_venta: p.precioVenta, foto: p.foto || "", descripcion: p.descripcion || "",
     }));
     const res = await fetch("/api/productos", {
       method: "PUT",
@@ -1203,7 +1206,7 @@ function EncabezadoPagina({ icon: Icon, titulo, descripcion }) {
   );
 }
 
-const VACIO = { codigo: "", nombre: "", cbm: "", peso: "", precioCbm: "", precioProducto: "", precioVenta: "", foto: "" };
+const VACIO = { codigo: "", nombre: "", descripcion: "", cbm: "", peso: "", precioCbm: "", precioProducto: "", precioVenta: "", foto: "" };
 const EMPRESA_POR_DEFECTO = {
   nombre: "Taller Gregoriana",
   contacto: "Taller Mecánico y Lubricentro",
@@ -1303,7 +1306,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
       setError(`Ya existe un producto con el código ${codigo}.`); return;
     }
     const item = {
-      id: editId || uid(), codigo, nombre,
+      id: editId || uid(), codigo, nombre, descripcion: form.descripcion.trim(),
       cbm: num(form.cbm), peso: num(form.peso), precioCbm: num(form.precioCbm),
       precioProducto: num(form.precioProducto), precioVenta: num(form.precioVenta), foto: form.foto,
     };
@@ -1319,7 +1322,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
 
   function editar(p) {
     setForm({
-      codigo: p.codigo, nombre: p.nombre, cbm: String(p.cbm), peso: p.peso ? String(p.peso) : "",
+      codigo: p.codigo, nombre: p.nombre, descripcion: p.descripcion || "", cbm: String(p.cbm), peso: p.peso ? String(p.peso) : "",
       precioCbm: String(p.precioCbm), precioProducto: String(p.precioProducto),
       precioVenta: p.precioVenta ? String(p.precioVenta) : "", foto: p.foto || "",
     });
@@ -1367,6 +1370,12 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
                 <label className="lbl" htmlFor="p-nombre">Nombre</label>
                 <input id="p-nombre" className="inp" value={form.nombre} onChange={set("nombre")} />
               </div>
+            </div>
+
+            <div>
+              <label className="lbl" htmlFor="p-descripcion">Descripción</label>
+              <textarea id="p-descripcion" className="inp" rows={3} value={form.descripcion}
+                onChange={set("descripcion")} placeholder="Características y detalles del producto" style={{ resize: "vertical" }} />
             </div>
 
             <div className="form-grid-3">
@@ -1443,28 +1452,26 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
             {filtrados.map((p) => {
               const k = cbmCobro(p.cbm, p.peso);
               return (
-                <article key={p.id} className="paper p-3 flex gap-3">
+                <article key={p.id} className="paper p-3 flex gap-3 product-card">
                   <Thumb src={p.foto} size={76} />
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 product-content">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-sm muted num">{p.codigo}</div>
-                        <div className="font-semibold truncate">{p.nombre}</div>
+                        <div className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</div>
                       </div>
                       <div className="flex flex-shrink-0">
                         <button className="icon-btn" onClick={() => editar(p)} aria-label={`Editar ${p.nombre}`}><Pencil size={17} /></button>
                         <button className="icon-btn" onClick={() => setConfirmId(p.id)} aria-label={`Eliminar ${p.nombre}`}><Trash2 size={17} /></button>
                       </div>
                     </div>
+                    {p.descripcion && <p className="product-description">{p.descripcion}</p>}
                     <div className="product-info-line mt-2">
                       <Dato label="CBM por volumen" value={`${m3(k.vol)} m³`} />
                       <Dato label="CBM por peso" value={`${m3(k.porPeso)} m³`} />
                       <Dato label="Peso" value={p.peso ? kg(p.peso) : "Sin peso"} cls={p.peso ? "" : "muted"} />
                       <Dato label="CBM a cobrar" value={`${m3(k.cobrable)} m³, por ${k.por}`} strong />
-                      <Dato label="Precio CBM" value={money(p.precioCbm)} />
                       <Dato label="Precio producto" value={money(p.precioProducto)} strong />
-                      <Dato label="Precio de venta" value={p.precioVenta ? money(p.precioVenta) : "Sin precio"}
-                        strong={!!p.precioVenta} cls={p.precioVenta ? "" : "muted"} />
                     </div>
                     {confirmId === p.id && (
                       <div className="flex items-center gap-2 mt-3">
@@ -2354,6 +2361,7 @@ function CatalogoPublico() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm muted num">{p.codigo}</div>
                 <h2 className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</h2>
+                {p.descripcion && <p className="product-description">{p.descripcion}</p>}
                 <div className="flex gap-4 mt-2" style={{ flexWrap: "wrap" }}>
                   <Dato label="Volumen" value={`${m3(p.cbm)} m³`} />
                   <Dato label="Peso" value={p.peso ? kg(p.peso) : "Consultar"} />
