@@ -537,6 +537,13 @@ const soloFecha = (d) => new Date(d).toLocaleDateString("es", { day: "2-digit", 
 const entregaEstimada = (c) => (c?.totales?.confirmadaEl
   ? new Date(new Date(c.totales.confirmadaEl).getTime() + (DIAS_PRODUCCION + DIAS_ENVIO) * 86400000) : null);
 
+// Copia con costos de una cotización de cliente, para "Cotizaciones internas".
+const copiaInterna = (c) => ({
+  id: uid(), numero: c.numero, fecha: c.fecha, cliente: c.cliente, deCliente: true,
+  descuento: c.descuento || 0, descuentoMonto: c.descuentoMonto || 0, totalFinal: totalDeCliente(c),
+  lineas: c.lineas.map((l) => ({ ...l, id: uid() })), totales: calcTotales(c.lineas),
+});
+
 const claveCliente = (c) => {
   const k = c.totales?.contacto || {};
   return k.tel || k.token || `nombre:${(c.cliente || "Sin nombre").trim().toLowerCase()}`;
@@ -2020,12 +2027,6 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     setDetalle(null); setError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
-  // Copia con costos para "Cotizaciones internas".
-  const copiaInterna = (c) => ({
-    id: uid(), numero: c.numero, fecha: c.fecha, cliente: c.cliente, deCliente: true,
-    descuento: c.descuento || 0, descuentoMonto: c.descuentoMonto || 0, totalFinal: totalDeCliente(c),
-    lineas: c.lineas.map((l) => ({ ...l, id: uid() })), totales: calcTotales(c.lineas),
-  });
 
   const t = useMemo(() => calcTotalesCliente(lineas), [lineas]);
   const porcentaje = Math.min(100, Math.max(0, num(descuento)));
@@ -2091,24 +2092,14 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
 
     setGuardando(true);
     const ok = await guardarCotizaciones({ contador: n, lista: [registro, ...cotiz.lista] });
-    let copiada = false;
-    if (ok) {
-      const copia = {
-        id: uid(), numero, fecha: ahora, cliente: cliente.trim(), deCliente: true,
-        descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal,
-        lineas: lineasFinal.map((l) => ({ ...l, id: uid() })),
-        totales: calcTotales(lineasFinal),
-      };
-      copiada = await guardarInternas({ ...internas, lista: [copia, ...internas.lista] });
-    }
     setGuardando(false);
     if (ok) {
-      avisar(copiada ? `${numero} registrada, también en las internas` : `Cotización ${numero} registrada`);
+      avisar(`${numero} registrada, también en las internas`);
       limpiarFormulario();
     }
   }
 
-  // Cambia datos de una cotización guardada (estado, pagos). Al confirmarse, deja su copia en las internas.
+  // Cambia datos de una cotización guardada (estado, pagos).
   async function actualizar(id, mutar, mensaje) {
     const actual = cotiz.lista.find((c) => c.id === id);
     if (!actual) return false;
@@ -2117,9 +2108,6 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     if (!ok) return false;
     setDetalle(nueva);
     if (mensaje) avisar(mensaje);
-    if (esVendida(nueva) && !internas.lista.some((c) => c.numero === nueva.numero)) {
-      await guardarInternas({ ...internas, lista: [copiaInterna(nueva), ...internas.lista] });
-    }
     return true;
   }
 
@@ -2686,6 +2674,13 @@ function AdminApp() {
     }
     if (nuevas.length) guardarFichas([...nuevas, ...fichas]);
   }, [cargando, clientes.lista, fichas]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toda cotización de cliente tiene su cotización interna (con costos), la haya hecho yo o el cliente.
+  useEffect(() => {
+    if (cargando) return;
+    const faltan = clientes.lista.filter((c) => !internas.lista.some((x) => x.numero === c.numero));
+    if (faltan.length) guardarInternas({ ...internas, lista: [...faltan.map(copiaInterna), ...internas.lista] });
+  }, [cargando, clientes.lista, internas.lista]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const guardarEmpresa = async (data) => {
     setEmpresa(data);
