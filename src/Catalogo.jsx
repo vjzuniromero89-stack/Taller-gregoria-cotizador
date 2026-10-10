@@ -12,7 +12,42 @@ const m3 = (n) => (n || 0).toLocaleString("en-US", { maximumFractionDigits: 3 })
 const kilos = (n) => (n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " kg";
 const sinAcentos = (v) => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-const ESTILOS = `
+/* ---------- portada "Vitrina amarilla": fondo de la marca con las máquinas en primer plano ---------- */
+export const ESTILOS_VITRINA = `
+.vitrina { position:relative; min-height:300px; }
+.vitrina-placa { position:absolute; background:#fff; border-radius:14px; padding:10px; box-shadow:0 14px 30px rgba(60,44,0,.35); }
+.vitrina-placa img { width:100%; height:100%; object-fit:contain; display:block; }
+.vitrina-placa span { position:absolute; left:10px; top:10px; background:#14222B; color:#fff; font-family:'Barlow Condensed',sans-serif;
+  font-weight:700; font-size:15px; padding:2px 9px; border-radius:5px; max-width:calc(100% - 20px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vitrina-placa:nth-child(1) { width:34%; height:78%; left:4%; top:13%; transform:rotate(-4deg); }
+.vitrina-placa:nth-child(2) { width:38%; height:72%; left:31%; top:6%; transform:rotate(2deg); z-index:2; }
+.vitrina-placa:nth-child(3) { width:32%; height:62%; right:2%; top:28%; transform:rotate(5deg); }
+.vitrina-placa:only-child { width:56%; height:84%; left:22%; top:8%; transform:rotate(3deg); }
+@media (prefers-reduced-motion:no-preference) {
+  .vitrina-placa { animation:vitrina-entra .7s cubic-bezier(.16,1,.3,1) both; }
+  .vitrina-placa:nth-child(2) { animation-delay:.08s; } .vitrina-placa:nth-child(3) { animation-delay:.16s; }
+  @keyframes vitrina-entra { from { translate:0 26px; opacity:0; } to { translate:0 0; opacity:1; } }
+}
+`;
+
+/** Hasta tres máquinas con foto, de categorías distintas cuando se puede. */
+export function Vitrina({ productos }) {
+  const elegidas = useMemo(() => {
+    const conFoto = (productos || []).filter((p) => p.foto);
+    const salida = [], vistas = new Set();
+    for (const p of conFoto) { if (salida.length < 3 && !vistas.has(p.categoria)) { salida.push(p); vistas.add(p.categoria); } }
+    for (const p of conFoto) { if (salida.length < 3 && !salida.includes(p)) salida.push(p); }
+    return salida;
+  }, [productos]);
+  if (!elegidas.length) return null;
+  return (
+    <div className="vitrina" aria-hidden="true">
+      {elegidas.map((p) => <div key={p.id || p.codigo} className="vitrina-placa"><span>{p.codigo}</span><img src={p.foto} alt="" /></div>)}
+    </div>
+  );
+}
+
+const ESTILOS = `${ESTILOS_VITRINA}
 .cat { font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif; color:#14222B; background:#EEF2F4; min-height:100vh; }
 .cat-cond { font-family:'Barlow Condensed','Arial Narrow',system-ui,sans-serif; }
 .cat-num { font-variant-numeric:tabular-nums; }
@@ -40,6 +75,29 @@ const ESTILOS = `
   background:#fff; box-shadow:0 8px 28px rgba(0,0,0,.28); }
 .cat-buscar input:focus { outline:3px solid #F2B705; outline-offset:2px; }
 
+.cat-amarilla .cat-top { background:#F2B705; color:#14222B; }
+.cat-amarilla .cat-top::before { display:none; }
+.cat-amarilla .cat-top::after { background:repeating-linear-gradient(135deg,#14222B 0 14px,#F2B705 14px 28px); }
+.cat-amarilla .cat-top-in { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); gap:10px; align-items:end; padding-bottom:40px; }
+.cat-amarilla .cat-top-texto { min-width:0; }
+.cat-amarilla .cat-marca span { color:#4A3900; }
+.cat-amarilla .cat-top h1 { font-weight:800; font-size:clamp(40px,5.4vw,64px); }
+.cat-amarilla .cat-top h1 em { color:#14222B; box-shadow:inset 0 -.2em 0 #fff; }
+.cat-amarilla .cat-top p { color:#3A2C00; font-weight:500; }
+.cat-amarilla .cat-buscar input { box-shadow:0 8px 22px rgba(60,44,0,.3); }
+.cat-amarilla .cat-buscar input:focus, .cat-amarilla .cat-tabs button:focus-visible { outline-color:#14222B; }
+.cat-amarilla .cat-tabs { background:rgba(20,34,43,.14); }
+.cat-amarilla .cat-tabs button { color:#14222B; }
+.cat-amarilla .cat-tabs button[aria-selected="true"] { background:#14222B; color:#fff; }
+.cat-amarilla .cat-tabs i { background:#fff; color:#14222B; }
+.cat-amarilla .cat-mis-boton { background:#14222B; color:#fff; }
+.cat-amarilla .cat-mis-boton:hover { background:#24394A; }
+.cat-amarilla .vitrina { align-self:stretch; min-height:320px; }
+.cat-amarilla.sin-vitrina .cat-top-in { grid-template-columns:1fr; }
+@media (max-width:820px) {
+  .cat-amarilla .cat-top-in { grid-template-columns:1fr; padding-bottom:30px; }
+  .cat-amarilla .vitrina { display:none; }
+}
 .cat-filtros { position:sticky; top:0; z-index:20; background:rgba(238,242,244,.94); backdrop-filter:blur(8px);
   border-bottom:1px solid #D5DEE3; }
 .cat-pills { display:flex; gap:8px; overflow-x:auto; padding:12px 0; scrollbar-width:none; }
@@ -967,15 +1025,17 @@ function Seguimiento({ cot }) {
 
 function PaginaCliente({ empresa, titulo, children }) {
   return (
-    <div className="cat">
+    <div className="cat cat-amarilla sin-vitrina">
       <style>{ESTILOS}</style>
       <header className="cat-top">
         <div className="cat-wrap cat-top-in">
-          <div className="cat-marca">
-            <img src={empresa.logo} alt="" />
-            <div><b>{empresa.nombre}</b><span>{empresa.contacto.split("\n")[0]}</span></div>
+          <div className="cat-top-texto">
+            <div className="cat-marca">
+              <img src={empresa.logo} alt="" />
+              <div><b>{empresa.nombre}</b><span>{empresa.contacto.split("\n")[0]}</span></div>
+            </div>
+            <h1>{titulo}</h1>
           </div>
-          <h1>{titulo}</h1>
         </div>
       </header>
       <main className="cat-wrap" style={{ paddingTop: 22, paddingBottom: 48, maxWidth: 980 }}>{children}</main>
@@ -1121,6 +1181,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
   // En la cuenta del cliente: pestaña Catálogo o pestaña Mis cotizaciones (?ver=cotizaciones la abre directo).
   const [vista, setVista] = useState(() => (cuenta && new URLSearchParams(window.location.search).get("ver") === "cotizaciones" ? "cotizaciones" : "catalogo"));
   const enCotizaciones = Boolean(cuenta) && vista === "cotizaciones";
+  const amarilla = !dentro && modo === "cliente"; // portada amarilla en todo lo que ve el cliente
   const verVista = (v) => {
     setVista(v);
     window.history.replaceState(null, "", window.location.pathname + (v === "cotizaciones" ? "?ver=cotizaciones" : ""));
@@ -1145,10 +1206,11 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
   const cerrarPanel = useMemo(() => () => setPanel(false), []);
 
   return (
-    <div className={`cat cat-${modo}${dentro ? " cat-dentro" : ""}`}>
+    <div className={`cat cat-${modo}${dentro ? " cat-dentro" : ""}${amarilla ? " cat-amarilla" : ""}${amarilla && enCotizaciones ? " sin-vitrina" : ""}`}>
       <style>{ESTILOS}</style>
       <header className="cat-top">
         <div className="cat-wrap cat-top-in">
+          <div className="cat-top-texto">
           <div className="cat-marca">
             <img src={LOGO_POR_DEFECTO} alt="" />
             <div><b>Taller Gregoriana</b><span>Taller Mecánico y Lubricentro</span></div>
@@ -1167,7 +1229,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
             <h1>{cuenta.titulo}</h1>
             <p>Aquí ves el estado de tus pedidos y puedes cotizar más equipos del catálogo.</p>
           </> : <>
-            <h1>Catálogo de <em>equipos</em> para taller</h1>
+            <h1>Equipos que levantan tu <em>taller</em></h1>
             <p>Elevadores, alineadoras, desmontadoras, balanceadoras y más. Toca un equipo para ver su ficha técnica completa.</p>
             {miEnlace && <p style={{ marginTop: 12 }}><a className="cat-btn cat-mis-boton" href={`/cliente/${miEnlace}?ver=cotizaciones`}><ClipboardList size={17} />Mis cotizaciones</a></p>}
           </>}
@@ -1187,6 +1249,8 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
                 value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
           )}
+          </div>
+          {amarilla && !enCotizaciones && <Vitrina productos={productos} />}
         </div>
       </header>
 

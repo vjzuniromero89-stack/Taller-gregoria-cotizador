@@ -7,7 +7,7 @@ import {
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
 import { KG_POR_CBM, fecha, PIE_TEXTO, hojaImagen, TIEMPOS_ENTREGA, DIAS_PRODUCCION, DIAS_ENVIO } from "./hoja.js";
-import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, VistaCotizacion, VistaCliente, precioConGanancia, numeroWhatsapp } from "./Catalogo.jsx";
+import Catalogo, { Vitrina, ESTILOS_VITRINA, EnlaceCatalogo as EnlaceDeCatalogo, VistaCotizacion, VistaCliente, precioConGanancia, numeroWhatsapp } from "./Catalogo.jsx";
 import { FICHA_VACIA, armarDescripcion, leerDescripcion, cbmDeMedidas } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
@@ -252,6 +252,28 @@ const STYLES = `
   font-size:clamp(28px,5vw,44px); line-height:1.05; margin:0 0 6px; }
 .hero p { font-size:15px; opacity:.9; margin:0; }
 
+.portada { position:relative; border-radius:16px; overflow:hidden; background:#F2B705; color:#14222B; display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:8px; box-shadow:0 10px 30px rgba(20,34,43,.16); }
+.portada::after { content:""; position:absolute; left:0; right:0; bottom:0; height:10px; z-index:3;
+  background:repeating-linear-gradient(135deg,#14222B 0 16px,#F2B705 16px 32px); }
+.portada-texto { padding:30px 0 40px 30px; display:flex; flex-direction:column; justify-content:flex-end; min-width:0; position:relative; z-index:2; }
+.portada h2 { font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:clamp(36px,4.6vw,58px); line-height:.94; margin:0; text-wrap:balance; }
+.portada p { margin:10px 0 18px; font-size:16px; font-weight:500; line-height:1.4; color:#3A2C00; max-width:400px; }
+.portada-datos { display:flex; flex-wrap:wrap; gap:14px 28px; margin:0; }
+.portada-datos dt { font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#5F4600; }
+.portada-datos dd { margin:0; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:32px; line-height:1.05; }
+.portada-botones { display:flex; flex-wrap:wrap; gap:8px; margin-top:20px; }
+.portada-botones .btn { background:#14222B; color:#fff; }
+.portada-botones .btn:hover { background:#24394A; }
+.portada-botones .btn.claro { background:rgba(255,255,255,.72); color:#14222B; }
+.portada-botones .btn.claro:hover { background:#fff; }
+.portada-botones .btn:focus-visible { outline-color:#14222B; }
+.portada .vitrina { min-height:340px; }
+@media (max-width:900px) {
+  .portada { grid-template-columns:1fr; }
+  .portada-texto { padding:22px 18px 34px; }
+  .portada .vitrina { display:none; }
+}
 .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
   gap:14px; margin-top:20px; }
 .stat-card { background:#fff; border:1px solid #CAD4DA; border-radius:12px;
@@ -2645,6 +2667,13 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
   const porCobrar = useMemo(
     () => clientes.lista.filter(esVendida).reduce((s, c) => s + Math.max(0, totalDeCliente(c) - pagadoDe(c)), 0), [clientes.lista]);
 
+  const pendientesInicio = clientes.lista.filter((c) => estadoDe(c) === "pendiente").length;
+  const gananciaDelMes = useMemo(() => {
+    const mes = new Date().toISOString().slice(0, 7);
+    return clientes.lista.filter((c) => esVendida(c) && String(c.totales?.confirmadaEl || c.fecha).slice(0, 7) === mes)
+      .reduce((s, c) => s + gananciaDeCliente(c), 0);
+  }, [clientes.lista]);
+
   const recientes = useMemo(() => {
     return [...clientes.lista].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 5);
   }, [clientes.lista]);
@@ -2659,15 +2688,22 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
 
   return (
     <div className="space-y-6">
-      <div className="hero" style={{ backgroundImage: `url(${PUERTO_IMG})` }}>
-        <div className="hero-content">
-          <div className="flex items-center gap-2 mb-2" style={{ opacity: .85 }}>
-            <Ship size={18} />
-            <span className="text-sm font-medium" style={{ letterSpacing: ".06em", textTransform: "uppercase" }}>Importaciones</span>
+      <style>{ESTILOS_VITRINA}</style>
+      <div className="portada">
+        <div className="portada-texto">
+          <h2>Equipos que levantan tu taller</h2>
+          <p>{(empresa && empresa.nombre) || "Taller Gregoriana"} · {totalProductos} {totalProductos === 1 ? "equipo" : "equipos"} en catálogo, listos para cotizar.</p>
+          <dl className="portada-datos">
+            <div><dt>Pendientes</dt><dd className="num">{pendientesInicio}</dd></div>
+            <div><dt>Por cobrar</dt><dd className="num">{money(porCobrar)}</dd></div>
+            <div><dt>Ganancia del mes</dt><dd className="num">{money(gananciaDelMes)}</dd></div>
+          </dl>
+          <div className="portada-botones">
+            <button className="btn" onClick={() => irA("clientes")}><Plus size={17} />Nueva cotización</button>
+            <button className="btn claro" onClick={() => irA("ganancias")}><TrendingUp size={17} />Ver ganancias</button>
           </div>
-          <h2>Bienvenido a tu cotizador</h2>
-          <p>{(empresa && empresa.nombre) || "Taller Gregoriana"} · Resumen general de tu actividad</p>
         </div>
+        <Vitrina productos={productos} />
       </div>
 
       <div className="stats-grid">
