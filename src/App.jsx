@@ -86,7 +86,33 @@ const STYLES = `
 .fila-cot.abierta .ver-maquinas { transform:rotate(180deg); }
 .fila-maquina { background:#FBFCFC; font-size:13.5px; }
 .fila-maquina th { padding-left:50px !important; }
-.fila-maquina td, .fila-maquina th { border-top:1px dashed #E1E7EA !important; color:#314551; }
+.fila-maquina td, .fila-maquina th { border-top:1px dashed #E1E7EA !important; }
+.fila-maquina td:not(.pos):not(.neg), .fila-maquina th { color:#314551; }
+.tabla-ganancias td.pos { background:#EEF9F2; }
+.tabla-ganancias td.neg { background:#FBEEEB; }
+.app ::selection { background:#F2B705; color:#14222B; }
+.app { accent-color:#1B5E6B; scrollbar-color:#9FB0B9 transparent; }
+.page-head.tono-verde .page-head-icon { color:#14603A; background:#DDF3E6; }
+.page-head.tono-ambar .page-head-icon { color:#7A5A00; background:#FFF4CC; }
+.page-head.tono-azul .page-head-icon { color:#1F4E8C; background:#E3ECFA; }
+.page-head.tono-rojo .page-head-icon { color:#8A2B1B; background:#F9E1DC; }
+.page-head.tono-oscuro .page-head-icon { color:#F2B705; background:#14222B; }
+.page-head { position:relative; overflow:hidden; }
+.page-head::after { content:""; position:absolute; left:0; right:0; bottom:0; height:4px; background:#1B5E6B; }
+.page-head.tono-verde::after { background:#1D7A46; }
+.page-head.tono-ambar::after { background:#F2B705; }
+.page-head.tono-azul::after { background:#2F6FC4; }
+.page-head.tono-rojo::after { background:#A3321F; }
+.page-head.tono-oscuro::after { background:repeating-linear-gradient(135deg,#F2B705 0 12px,#14222B 12px 24px); }
+.resumen-ganancia > .t-venta { background:#E9F2F4; border-color:#B4CDD3; }
+.resumen-ganancia > .t-ganancia { background:#E6F6EC; border-color:#A9D9BC; }
+.resumen-ganancia > .t-cobrado { background:#E8EFFA; border-color:#B5C8E6; }
+.resumen-ganancia > .t-pendiente { background:#FFF7DB; border-color:#EBD27F; }
+.resumen-ganancia > .t-venta b { color:#134650; }
+.resumen-ganancia > .t-cobrado b { color:#1F4E8C; }
+.stat-card { position:relative; overflow:hidden; }
+.stat-card::after { content:""; position:absolute; left:0; right:0; top:0; height:4px; background:var(--tono,#CAD4DA); }
+.quote-list button:hover { background:#F3F8F9; }
 .fila-maquina td:nth-child(2) { font-size:12.5px; color:#5B6B75; }
 .enlace { color:#1B5E6B; font-weight:600; text-decoration:underline; padding:0; }
 .resumen-ganancia { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
@@ -1224,9 +1250,9 @@ function SinProductos({ irAProductos }) {
   );
 }
 
-function EncabezadoPagina({ icon: Icon, titulo, descripcion }) {
+function EncabezadoPagina({ icon: Icon, titulo, descripcion, tono = "" }) {
   return (
-    <div className="page-head">
+    <div className={`page-head ${tono ? `tono-${tono}` : ""}`}>
       <div className="page-head-icon"><Icon size={24} /></div>
       <div className="min-w-0">
         <h2>{titulo}</h2>
@@ -1413,7 +1439,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
 
   return (
     <div className="space-y-6">
-      <EncabezadoPagina icon={Package} titulo="Productos"
+      <EncabezadoPagina icon={Package} tono="oscuro" titulo="Productos"
         descripcion="Administra el catálogo, los costos, el peso y el CBM facturable de cada producto." />
       <EnlaceCatalogo avisar={avisar} />
       <EmpresaCard empresa={empresa} guardarEmpresa={guardarEmpresa} avisar={avisar} />
@@ -1728,18 +1754,18 @@ function CotizacionInternaView({ cotiz, guardarCotizaciones, clientes, avisar, e
         ))}
       </div>
 
-      <EncabezadoPagina icon={FileTextIcon} titulo="Cotizaciones internas"
+      <EncabezadoPagina icon={FileTextIcon} tono="rojo" titulo="Cotizaciones internas"
         descripcion="Consulta costos, cargos y ganancias. Los descuentos se muestran solo como referencia visual." />
 
       <div className="resumen-ganancia">
-        <div>
+        <div className="t-ganancia">
           <span className="lbl">Ganancia confirmada</span>
-          <b className="num pos">{money(gananciaPor(true))}</b>
+          <b className={`num ${gananciaPor(true) < 0 ? "neg" : "pos"}`}>{money(gananciaPor(true))}</b>
           <span className="text-sm muted">De cotizaciones que el cliente ya confirmó.</span>
         </div>
-        <div>
+        <div className="t-pendiente">
           <span className="lbl">Por confirmar</span>
-          <b className="num muted">{money(gananciaPor(false))}</b>
+          <b className={`num ${gananciaPor(false) < 0 ? "neg" : "pos"}`}>{money(gananciaPor(false))}</b>
           <span className="text-sm muted">De cotizaciones pendientes. Las canceladas no cuentan.</span>
         </div>
       </div>
@@ -2165,10 +2191,10 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     <div className="space-y-6">
       {clienteFijo ? <>
         <button className="btn btn-ghost" onClick={onVolver}>← Volver a Clientes</button>
-        <EncabezadoPagina icon={Contact} titulo={`Cotizaciones de ${clienteFijo.nombre}`}
+        <EncabezadoPagina icon={Contact} tono="azul" titulo={`Cotizaciones de ${clienteFijo.nombre}`}
           descripcion="Abre una cotización para cambiar su estado, registrar pagos o editarla. También puedes hacerle una nueva." />
       </> : (
-        <EncabezadoPagina icon={Users} titulo="Cotizaciones clientes"
+        <EncabezadoPagina icon={Users} tono="ambar" titulo="Cotizaciones clientes"
           descripcion="Prepara cotizaciones, aplica descuentos y comparte documentos profesionales con tus clientes." />
       )}
       <section className="paper p-4">
@@ -2337,7 +2363,7 @@ function ClientesView({ clientes, fichas, guardarFichas, avisar, vistaCotizacion
 
   return (
     <div className="space-y-6">
-      <EncabezadoPagina icon={Contact} titulo="Clientes"
+      <EncabezadoPagina icon={Contact} tono="azul" titulo="Clientes"
         descripcion="Crea clientes o deja que se agreguen solos con cada cotización. Cada uno tiene un enlace propio donde ve el estado de sus pedidos." />
 
       <section className="form-card">
@@ -2488,15 +2514,15 @@ function GananciasView({ clientes }) {
   }
 
   const tarjetas = [
-    ["Ventas confirmadas", money(tot.venta), `${delPeriodo.length} ${delPeriodo.length === 1 ? "cotización" : "cotizaciones"}`],
-    ["Ganancia", money(tot.ganancia), tot.venta > 0 ? `margen de ${pct(tot.ganancia / tot.venta)}` : "sin ventas en el periodo", tot.ganancia >= 0 ? "pos" : "neg"],
-    ["Cobrado", money(tot.pagado), `por cobrar: ${money(porCobrar)}`],
-    ["Por confirmar", money(sumar(pendientes, "ganancia")), `ganancia de ${pendientes.length} ${pendientes.length === 1 ? "pendiente" : "pendientes"}`, "muted"],
+    ["Ventas confirmadas", money(tot.venta), `${delPeriodo.length} ${delPeriodo.length === 1 ? "cotización" : "cotizaciones"}`, "", "t-venta"],
+    ["Ganancia", money(tot.ganancia), tot.venta > 0 ? `margen de ${pct(tot.ganancia / tot.venta)}` : "sin ventas en el periodo", tot.ganancia >= 0 ? "pos" : "neg", "t-ganancia"],
+    ["Cobrado", money(tot.pagado), `por cobrar: ${money(porCobrar)}`, "", "t-cobrado"],
+    ["Por confirmar", money(sumar(pendientes, "ganancia")), `ganancia de ${pendientes.length} ${pendientes.length === 1 ? "pendiente" : "pendientes"}`, sumar(pendientes, "ganancia") < 0 ? "neg" : "pos", "t-pendiente"],
   ];
 
   return (
     <div className="space-y-6">
-      <EncabezadoPagina icon={TrendingUp} titulo="Ganancias"
+      <EncabezadoPagina icon={TrendingUp} tono="verde" titulo="Ganancias"
         descripcion="Lo que vendiste, lo que te costó y lo que te quedó. Solo cuentan las cotizaciones que el cliente confirmó." />
 
       <div className="section-toolbar" style={{ marginBottom: 0 }}>
@@ -2508,8 +2534,8 @@ function GananciasView({ clientes }) {
       </div>
 
       <div className="resumen-ganancia">
-        {tarjetas.map(([titulo, valor, nota, color]) => (
-          <div key={titulo}>
+        {tarjetas.map(([titulo, valor, nota, color, tono]) => (
+          <div key={titulo} className={tono}>
             <span className="lbl">{titulo}</span>
             <b className={`num ${color || ""}`}>{valor}</b>
             <span className="text-sm muted">{nota}</span>
@@ -2625,9 +2651,9 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
 
   const stats = [
     { label: "Productos", value: totalProductos, sub: "en catálogo", color: "#1B5E6B", bg: "#E4EFF1", icon: Package },
-    { label: "Cotizaciones internas", value: totalInternas, sub: "registradas", color: "#7A5A00", bg: "#FFF4CC", icon: FileTextIcon },
-    { label: "Cotizaciones clientes", value: totalClientes, sub: "registradas", color: "#7A2D1B", bg: "#F6DDD6", icon: Users },
-    { label: "Ganancia confirmada", value: money(gananciaTotal), sub: `por confirmar: ${money(gananciaPendiente)}`, color: "#155F3D", bg: "#D7EFE2", icon: TrendingUp },
+    { label: "Cotizaciones internas", value: totalInternas, sub: "registradas", color: "#8A2B1B", bg: "#F9E1DC", icon: FileTextIcon },
+    { label: "Cotizaciones clientes", value: totalClientes, sub: "registradas", color: "#1F4E8C", bg: "#E3ECFA", icon: Users },
+    { label: "Ganancia confirmada", value: money(gananciaTotal), sub: `por confirmar: ${money(gananciaPendiente)}`, color: gananciaTotal < 0 ? "#A3321F" : "#1D7A46", bg: "#D7EFE2", icon: TrendingUp },
     { label: "Por cobrar", value: money(porCobrar), sub: "saldo de cotizaciones confirmadas", color: "#7A5A00", bg: "#FFF4CC", icon: DollarSign },
   ];
 
@@ -2648,12 +2674,12 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
         {stats.map((s) => {
           const Icon = s.icon;
           return (
-            <div key={s.label} className="stat-card">
+            <div key={s.label} className="stat-card" style={{ "--tono": s.color }}>
               <div className="stat-icon" style={{ background: s.bg, color: s.color }}>
                 <Icon size={22} />
               </div>
               <div className="stat-label">{s.label}</div>
-              <div className="stat-value">{s.value}</div>
+              <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
               <div className="stat-sub">{s.sub}</div>
             </div>
           );

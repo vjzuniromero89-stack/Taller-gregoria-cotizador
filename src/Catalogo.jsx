@@ -16,6 +16,8 @@ const ESTILOS = `
 .cat { font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif; color:#14222B; background:#EEF2F4; min-height:100vh; }
 .cat-cond { font-family:'Barlow Condensed','Arial Narrow',system-ui,sans-serif; }
 .cat-num { font-variant-numeric:tabular-nums; }
+.cat ::selection { background:#F2B705; color:#14222B; }
+.cat { accent-color:#1B5E6B; }
 .cat-wrap { max-width:1240px; margin:0 auto; padding:0 20px; }
 
 .cat-top { background:#14222B; color:#fff; position:relative; overflow:hidden; }
