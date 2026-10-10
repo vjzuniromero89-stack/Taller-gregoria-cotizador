@@ -244,6 +244,12 @@ const ESTILOS = `
 .cat-estado-confirmada, .cat-estado-entregada { background:#DDF3E6; color:#14603A; }
 .cat-estado-produccion, .cat-estado-camino { background:#E4EFF1; color:#134650; }
 .cat-estado-cancelada { background:#EEF1F3; color:#5B6B75; }
+.cat-tabs { display:inline-flex; gap:4px; margin-top:20px; background:rgba(255,255,255,.1); border-radius:12px; padding:4px; }
+.cat-tabs button { border:0; background:none; color:#C4D1D7; border-radius:9px; padding:10px 18px; font-size:16px; font-weight:700; display:inline-flex; align-items:center; gap:8px; }
+.cat-tabs button[aria-selected="true"] { background:#fff; color:#14222B; }
+.cat-tabs button:focus-visible { outline:3px solid #F2B705; outline-offset:2px; }
+.cat-tabs i { font-style:normal; font-size:13px; background:#F2B705; color:#14222B; border-radius:999px; padding:1px 8px; }
+.cat-tabs + .cat-buscar { margin-top:16px; }
 .cat-cuenta-mis { margin-top:22px; }
 .cat-cuenta-mis h2 { font-size:32px; font-weight:700; margin:0 0 10px; line-height:1; }
 .cat-mis-boton { background:#F2B705; color:#14222B; }
@@ -977,7 +983,7 @@ export function VistaCotizacion({ id }) {
       </>}
       <p style={{ marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {cot?.token
-          ? <a className="cat-btn" href={`/cliente/${cot.token}`}>Mis cotizaciones y catálogo</a>
+          ? <a className="cat-btn" href={`/cliente/${cot.token}?ver=cotizaciones`}>Mis cotizaciones</a>
           : <a className="cat-btn claro" href="/catalogo">Ver el catálogo</a>}
       </p>
     </PaginaCliente>
@@ -1021,10 +1027,9 @@ export function VistaCliente({ token }) {
           })}
         </div>
       </>}
-      <h2 className="cat-cond" style={{ marginTop: 28 }}>Catálogo</h2>
     </section>
   );
-  return <Catalogo modo="cliente" cuenta={{ titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, arriba }} />;
+  return <Catalogo modo="cliente" cuenta={{ titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, contenido: arriba, cantidad: lista.length }} />;
 }
 
 const RUTAS = { cliente: "/catalogo", interno: "/catalogo-interno" };
@@ -1089,6 +1094,14 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
   const seleccionado = abierto ? productos.find((p) => p.codigo.toLowerCase() === abierto.toLowerCase()) : null;
   const sinPrecio = productos.filter((p) => p.venta <= 0).length;
   const miEnlace = !dentro && modo === "cliente" && !cuenta ? leerGuardado(CLAVE_TOKEN, "") : "";
+  // En la cuenta del cliente: pestaña Catálogo o pestaña Mis cotizaciones (?ver=cotizaciones la abre directo).
+  const [vista, setVista] = useState(() => (cuenta && new URLSearchParams(window.location.search).get("ver") === "cotizaciones" ? "cotizaciones" : "catalogo"));
+  const enCotizaciones = Boolean(cuenta) && vista === "cotizaciones";
+  const verVista = (v) => {
+    setVista(v);
+    window.history.replaceState(null, "", window.location.pathname + (v === "cotizaciones" ? "?ver=cotizaciones" : ""));
+    window.scrollTo({ top: 0 });
+  };
 
   // Cotización del cliente: solo en el catálogo público de clientes y si el taller configuró su WhatsApp.
   const empresa = useEmpresaPublica(!dentro && modo === "cliente");
@@ -1132,18 +1145,28 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
           </> : <>
             <h1>Catálogo de <em>equipos</em> para taller</h1>
             <p>Elevadores, alineadoras, desmontadoras, balanceadoras y más. Toca un equipo para ver su ficha técnica completa.</p>
-            {miEnlace && <p style={{ marginTop: 12 }}><a className="cat-btn cat-mis-boton" href={`/cliente/${miEnlace}`}><ClipboardList size={17} />Mis cotizaciones</a></p>}
+            {miEnlace && <p style={{ marginTop: 12 }}><a className="cat-btn cat-mis-boton" href={`/cliente/${miEnlace}?ver=cotizaciones`}><ClipboardList size={17} />Mis cotizaciones</a></p>}
           </>}
           {dentro && <EnlaceCatalogo modo={modo} avisar={avisar} />}
-          <div className="cat-buscar">
-            <Search size={20} aria-hidden="true" />
-            <input type="search" placeholder="Buscar por modelo, nombre o categoría" aria-label="Buscar equipo"
-              value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
+          {cuenta && (
+            <div className="cat-tabs" role="tablist" aria-label="Secciones">
+              <button type="button" role="tab" aria-selected={!enCotizaciones} onClick={() => verVista("catalogo")}>Catálogo</button>
+              <button type="button" role="tab" aria-selected={enCotizaciones} onClick={() => verVista("cotizaciones")}>
+                Mis cotizaciones<i>{cuenta.cantidad}</i>
+              </button>
+            </div>
+          )}
+          {!enCotizaciones && (
+            <div className="cat-buscar">
+              <Search size={20} aria-hidden="true" />
+              <input type="search" placeholder="Buscar por modelo, nombre o categoría" aria-label="Buscar equipo"
+                value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+          )}
         </div>
       </header>
 
-      {estado === "listo" && categorias.length > 1 && (
+      {estado === "listo" && categorias.length > 1 && !enCotizaciones && (
         <nav className="cat-filtros" aria-label="Categorías">
           <div className="cat-wrap cat-pills">
             <button type="button" className="cat-pill" aria-pressed={!categoria} onClick={() => setCategoria("")}>
@@ -1159,8 +1182,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
       )}
 
       <main className="cat-wrap">
-        {estado === "cargando" ? <p className="cat-cuenta" role="status">Cargando equipos…</p> : <>
-          {cuenta?.arriba}
+        {enCotizaciones ? <div style={{ paddingBottom: 56 }}>{cuenta.contenido}</div> : estado === "cargando" ? <p className="cat-cuenta" role="status">Cargando equipos…</p> : <>
           {aplicarGanancia && productos.length > 0 && <GananciaGeneral cuantos={productos.length} aplicar={aplicarGanancia} />}
           {cambiarPrecioCbm && productos.length > 0 && <PrecioCbmGeneral productos={productos} cambiar={cambiarPrecioCbm} />}
           <p className="cat-cuenta" role="status">

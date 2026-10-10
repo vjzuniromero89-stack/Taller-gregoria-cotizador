@@ -1760,7 +1760,7 @@ function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empres
   const entrega = entregaEstimada(cot);
   const telefonoCliente = cot.totales?.contacto?.telefono || "";
   const enlaceSeguimiento = `${window.location.origin}/cotizacion/${cot.id}`;
-  const enlaceCliente = cot.totales?.contacto?.token ? `${window.location.origin}/cliente/${cot.totales.contacto.token}` : "";
+  const enlaceCliente = cot.totales?.contacto?.token ? `${window.location.origin}/cliente/${cot.totales.contacto.token}?ver=cotizaciones` : "";
   const copiar = async (texto) => {
     try { await navigator.clipboard.writeText(texto); avisar("Enlace copiado"); }
     catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
@@ -2252,7 +2252,7 @@ function ClientesView({ clientes, avisar, irA }) {
         ) : (
           <div className="space-y-3">
             {filtrados.map((g) => {
-              const enlace = g.token ? `${window.location.origin}/cliente/${g.token}` : "";
+              const enlace = g.token ? `${window.location.origin}/cliente/${g.token}?ver=cotizaciones` : "";
               const pendientes = g.cotizaciones.filter((c) => estadoDe(c) === "pendiente").length;
               return (
                 <article key={g.clave} className="paper p-4">
