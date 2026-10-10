@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
-import { KG_POR_CBM, fecha, PIE_TEXTO, hojaImagen } from "./hoja.js";
+import { KG_POR_CBM, fecha, PIE_TEXTO, hojaImagen, TIEMPOS_ENTREGA } from "./hoja.js";
 import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, VistaCotizacion, precioConGanancia, numeroWhatsapp } from "./Catalogo.jsx";
 import { FICHA_VACIA, armarDescripcion, leerDescripcion, cbmDeMedidas } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
@@ -1687,6 +1687,7 @@ function DetalleCliente({ cot, onClose, onDelete, empresa, avisar }) {
       ["Subtotal", money(t.totalVenta)],
     ];
     if (porcentaje > 0) totales.push([`Descuento (${m3(porcentaje)}%)`, `− ${money(montoDescuento)}`]);
+    totales.push(...TIEMPOS_ENTREGA);
 
     return { empresa, cot, columnas, filas, totales, total: money(totalFinal), totalLabel: "Total con descuento" };
   };

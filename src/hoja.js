@@ -1,6 +1,15 @@
 /* Hoja de cotización dibujada como imagen. La usan la app y el catálogo de clientes. */
 export const KG_POR_CBM = 350;
 
+// Tiempos que se le informan al cliente en cada cotización.
+export const DIAS_PRODUCCION = 20;
+export const DIAS_ENVIO = 60;
+export const TIEMPOS_ENTREGA = [
+  ["Tiempo de producción", `${DIAS_PRODUCCION} días`],
+  ["Tiempo de envío", `${DIAS_ENVIO} días`],
+  ["Entrega aproximada", `${DIAS_PRODUCCION + DIAS_ENVIO} días`],
+];
+
 export const fecha = (iso) => {
   const d = new Date(iso);
   return d.toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" }) + ", " +

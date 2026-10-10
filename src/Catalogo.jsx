@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList } from "lucide-react";
 import { LOGO_POR_DEFECTO } from "./logo.js";
-import { hojaImagen } from "./hoja.js";
+import { hojaImagen, TIEMPOS_ENTREGA, DIAS_PRODUCCION, DIAS_ENVIO } from "./hoja.js";
 import { leerDescripcion } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
@@ -219,6 +219,7 @@ const ESTILOS = `
 .cat-enviar:hover { background:#0E6F3B; }
 .cat-nota-envio { font-size:13px; color:#5B6B75; text-align:right; margin:8px 0 0; }
 .cat-panel-ancho { max-width:860px; }
+.cat-tiempos { background:#E4EFF1; border-radius:8px; padding:10px 12px; font-size:14.5px; color:#134650; margin:12px 0 0; line-height:1.4; }
 .cat-guardada { display:flex; align-items:center; gap:8px; color:#1D7A46; font-weight:600; font-size:16px; margin:0 0 12px; }
 .cat-hoja-img { display:block; width:100%; height:auto; border:1px solid #D5DEE3; border-radius:10px; box-shadow:0 6px 22px rgba(20,34,43,.12); background:#fff; }
 .cat-vista { background:#fff; border:1px solid #D5DEE3; border-radius:16px; padding:18px; }
@@ -613,6 +614,7 @@ function datosHojaCliente(cot, empresa) {
   }));
   const totales = [["Equipos", String(cot.lineas.reduce((s, l) => s + l.cantidad, 0))]];
   if (cot.lineas.some((l) => !(l.precio > 0))) totales.push(["Equipos por consultar", "No incluidos en el total"]);
+  totales.push(...TIEMPOS_ENTREGA);
   return {
     empresa, columnas, filas, totales, total: dinero(cot.total), totalLabel: "Total",
     pie: "Precios en dólares estadounidenses.",
@@ -656,6 +658,7 @@ const enlaceWhatsapp = (cot, whatsapp) => `https://wa.me/${whatsapp}?text=${enco
   `Cliente: ${cot.cliente}`,
   `Teléfono: ${cot.telefono}`,
   ...(cot.total > 0 ? [`Total: ${dinero(cot.total)}`] : []),
+  `Entrega aproximada: ${DIAS_PRODUCCION + DIAS_ENVIO} días`,
   ...(cot.nota ? [`Nota: ${cot.nota}`] : []),
   "",
   "Ver la cotización:",
@@ -780,6 +783,9 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
                   <ClipboardList size={17} />{trabajando ? "Creando tu cotización…" : "Crear mi cotización"}
                 </button>
               </div>
+              <p className="cat-tiempos">
+                Entrega aproximada: <b>{DIAS_PRODUCCION + DIAS_ENVIO} días</b> ({DIAS_PRODUCCION} de producción + {DIAS_ENVIO} de envío).
+              </p>
               <p className="cat-nota-envio">Verás tu cotización como imagen y podrás enviarla al taller por WhatsApp.</p>
             </form>
           )}
