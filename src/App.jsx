@@ -64,6 +64,21 @@ const STYLES = `
 .pagos-resumen .saldo.cero { background:#DDF3E6; box-shadow:inset 0 0 0 2px #8FCFAA; }
 .pagos-form { display:grid; grid-template-columns:140px 1fr auto; gap:8px; margin-top:10px; align-items:end; }
 @media (max-width:640px) { .pagos-form { grid-template-columns:1fr; } .pagos-resumen { grid-template-columns:1fr; } }
+.cuenta-ganancia { margin:10px 0 0; max-width:460px; }
+.cuenta-ganancia > div { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-top:1px solid #E1E7EA; }
+.cuenta-ganancia > div:first-child { border-top:0; }
+.cuenta-ganancia dt { color:#5B6B75; } .cuenta-ganancia dd { margin:0; font-weight:600; }
+.cuenta-ganancia .total { border-top:2px solid #14222B; font-size:19px; }
+.cuenta-ganancia .total dt { color:#14222B; font-weight:700; } .cuenta-ganancia .total dd { font-weight:800; }
+.tabla-ganancias { overflow-x:auto; }
+.tabla-ganancias table { width:100%; border-collapse:collapse; font-size:14.5px; min-width:640px; }
+.tabla-ganancias th, .tabla-ganancias td { padding:10px 12px; text-align:right; white-space:nowrap; border-top:1px solid #E1E7EA; }
+.tabla-ganancias thead th { border-top:0; font-size:12px; font-weight:600; color:#5B6B75; text-transform:uppercase; letter-spacing:.04em; background:#F6F8F9; }
+.tabla-ganancias th:first-child, .tabla-ganancias td:first-child { text-align:left; }
+.tabla-ganancias tbody th { font-weight:500; }
+.tabla-ganancias tbody th b { display:block; } .tabla-ganancias tbody th span { display:block; font-size:12.5px; color:#5B6B75; }
+.tabla-ganancias td:nth-child(2) { text-align:left; }
+.enlace { color:#1B5E6B; font-weight:600; text-decoration:underline; padding:0; }
 .resumen-ganancia { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
 .resumen-ganancia > div { background:#fff; border:1px solid #CAD4DA; border-radius:12px; padding:14px 16px; }
 .resumen-ganancia b { display:block; font-family:'Barlow Condensed',sans-serif; font-size:30px; line-height:1.1; }
@@ -263,7 +278,7 @@ const STYLES = `
   .sidebar.open { transform:translateX(0); }
   .main-content { padding:14px; padding-top:76px; padding-bottom:96px; }
   .mobile-bottom-nav { position:fixed; left:0; right:0; bottom:0; z-index:43; display:grid;
-    grid-template-columns:repeat(7,1fr); background:#fff; border-top:1px solid #CAD4DA;
+    grid-auto-flow:column; grid-auto-columns:minmax(62px,1fr); overflow-x:auto; scrollbar-width:none; background:#fff; border-top:1px solid #CAD4DA;
     box-shadow:0 -4px 16px rgba(20,34,43,.10); padding:6px 4px max(6px,env(safe-area-inset-bottom)); }
   .mobile-nav-item { min-width:0; padding:7px 1px 5px; overflow-wrap:anywhere; text-align:center; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:3px; color:#5B6B75; font-size:10px;
@@ -530,7 +545,14 @@ const esVendida = (c) => ["confirmada", "produccion", "camino", "entregada"].inc
 const ChipEstado = ({ estado }) => <span className={`chip ${ESTADOS.find((e) => e[0] === estado)[2]}`}>{nombreEstado(estado)}</span>;
 
 const totalDeCliente = (c) => c.totalFinal ?? totalConDescuento(c, calcTotalesCliente(c.lineas).totalVenta);
-const gananciaDeCliente = (c) => totalDeCliente(c) - calcTotalesCliente(c.lineas).totalCosto;
+// Ganancia de una cotización: venta con descuento, menos producto, flete y comisión sobre el costo.
+const desgloseDe = (c) => {
+  const t = calcTotalesCliente(c.lineas);
+  const venta = totalDeCliente(c), comision = t.totalCosto * COMISION;
+  const ganancia = venta - t.totalCosto - comision;
+  return { venta, producto: t.totalProducto, flete: t.totalFlete, comision, ganancia, margen: venta > 0 ? ganancia / venta : 0 };
+};
+const gananciaDeCliente = (c) => desgloseDe(c).ganancia;
 const pagadoDe = (c) => (c?.totales?.pagos || []).reduce((suma, p) => suma + num(p.monto), 0);
 const soloFecha = (d) => new Date(d).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" });
 // Entrega estimada: la fecha de confirmación más los días de producción y de envío.
@@ -1662,10 +1684,9 @@ function CotizacionInternaView({ cotiz, guardarCotizaciones, clientes, avisar, e
   );
 
   const deCliente = (c) => clientes.lista.find((x) => x.numero === c.numero);
-  // Misma cuenta que cada fila de esta lista: venta menos costo con comisión.
-  const gananciaPor = (vendidas) => cotiz.lista
-    .filter((c) => (c.deCliente || c.origen) && (vendidas ? esVendida(deCliente(c)) : estadoDe(deCliente(c)) === "pendiente"))
-    .reduce((suma, c) => { const t = calcTotales(c.lineas); return suma + t.totalVenta - t.general; }, 0);
+  const gananciaPor = (vendidas) => clientes.lista
+    .filter((c) => (vendidas ? esVendida(c) : estadoDe(c) === "pendiente"))
+    .reduce((suma, c) => suma + gananciaDeCliente(c), 0);
 
   async function limpiar() {
     const quedan = cotiz.lista.filter((c) => clientes.lista.some((x) => x.numero === c.numero));
@@ -1708,11 +1729,7 @@ function CotizacionInternaView({ cotiz, guardarCotizaciones, clientes, avisar, e
         conEstado
         estadoFila={(c) => estadoDe(deCliente(c))}
         totalDe={(c) => calcTotales(c.lineas).general}
-        gananciaDe={(c) => {
-          if (!(c.deCliente || c.origen)) return null;
-          const t = calcTotales(c.lineas);
-          return t.totalVenta - t.general;
-        }}
+        gananciaDe={(c) => (deCliente(c) ? gananciaDeCliente(deCliente(c)) : null)}
         titulo="Registro de cotizaciones"
         conDescuento
         vacio="Aquí se guardan las cotizaciones que registras para tus clientes, con sus costos y tu ganancia."
@@ -2405,6 +2422,149 @@ function ClientesView({ clientes, fichas, guardarFichas, avisar, vistaCotizacion
   );
 }
 
+/** Registro de ganancias: cuánto se vendió, cuánto costó y cuánto quedó, por mes y por cotización. */
+function GananciasView({ clientes }) {
+  const [periodo, setPeriodo] = useState("");
+  const [verPendientes, setVerPendientes] = useState(false);
+  const mesDe = (iso) => String(iso || "").slice(0, 7);
+  const nombreMes = (clave) => {
+    const [a, m] = clave.split("-").map(Number);
+    const t = new Date(a, m - 1, 1).toLocaleDateString("es", { month: "long", year: "numeric" });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+
+  // Una venta cuenta en el mes en que el cliente la confirmó.
+  const filas = useMemo(() => clientes.lista
+    .filter((c) => estadoDe(c) !== "cancelada")
+    .map((c) => ({ c, ...desgloseDe(c), vendida: esVendida(c), pagado: pagadoDe(c), fechaVenta: esVendida(c) ? (c.totales?.confirmadaEl || c.fecha) : c.fecha }))
+    .sort((a, b) => new Date(b.fechaVenta) - new Date(a.fechaVenta)), [clientes.lista]);
+  const vendidas = filas.filter((f) => f.vendida);
+  const pendientes = filas.filter((f) => !f.vendida);
+  const meses = [...new Set(vendidas.map((f) => mesDe(f.fechaVenta)))].sort().reverse();
+  const delPeriodo = vendidas.filter((f) => !periodo || mesDe(f.fechaVenta) === periodo);
+  const sumar = (lista, campo) => lista.reduce((s, f) => s + f[campo], 0);
+  const tot = {
+    venta: sumar(delPeriodo, "venta"), producto: sumar(delPeriodo, "producto"), flete: sumar(delPeriodo, "flete"),
+    comision: sumar(delPeriodo, "comision"), ganancia: sumar(delPeriodo, "ganancia"), pagado: sumar(delPeriodo, "pagado"),
+  };
+  const porCobrar = delPeriodo.reduce((s, f) => s + Math.max(0, f.venta - f.pagado), 0);
+  const visibles = verPendientes ? pendientes : delPeriodo;
+
+  function descargar() {
+    const celda = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const cabecera = ["Número", "Cliente", "Fecha", "Estado", "Venta", "Costo producto", "Flete", "Comisión", "Ganancia", "Margen %", "Pagado", "Saldo"];
+    const lineas = [...delPeriodo, ...pendientes].map((f) => [
+      f.c.numero, f.c.cliente || "", String(f.fechaVenta).slice(0, 10), nombreEstado(estadoDe(f.c)), f.venta.toFixed(2), f.producto.toFixed(2),
+      f.flete.toFixed(2), f.comision.toFixed(2), f.ganancia.toFixed(2), (f.margen * 100).toFixed(1), f.pagado.toFixed(2), Math.max(0, f.venta - f.pagado).toFixed(2),
+    ]);
+    const csv = "﻿" + [cabecera, ...lineas].map((l) => l.map(celda).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `ganancias-${periodo || "todo"}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  const tarjetas = [
+    ["Ventas confirmadas", money(tot.venta), `${delPeriodo.length} ${delPeriodo.length === 1 ? "cotización" : "cotizaciones"}`],
+    ["Ganancia", money(tot.ganancia), tot.venta > 0 ? `margen de ${pct(tot.ganancia / tot.venta)}` : "sin ventas en el periodo", tot.ganancia >= 0 ? "pos" : "neg"],
+    ["Cobrado", money(tot.pagado), `por cobrar: ${money(porCobrar)}`],
+    ["Por confirmar", money(sumar(pendientes, "ganancia")), `ganancia de ${pendientes.length} ${pendientes.length === 1 ? "pendiente" : "pendientes"}`, "muted"],
+  ];
+
+  return (
+    <div className="space-y-6">
+      <EncabezadoPagina icon={TrendingUp} titulo="Ganancias"
+        descripcion="Lo que vendiste, lo que te costó y lo que te quedó. Solo cuentan las cotizaciones que el cliente confirmó." />
+
+      <div className="section-toolbar" style={{ marginBottom: 0 }}>
+        <select className="inp" style={{ maxWidth: 280 }} aria-label="Periodo" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
+          <option value="">Todo el tiempo</option>
+          {meses.map((m) => <option key={m} value={m}>{nombreMes(m)}</option>)}
+        </select>
+        <button className="btn btn-ghost" onClick={descargar} disabled={!filas.length}><FileText size={16} />Descargar para Excel</button>
+      </div>
+
+      <div className="resumen-ganancia">
+        {tarjetas.map(([titulo, valor, nota, color]) => (
+          <div key={titulo}>
+            <span className="lbl">{titulo}</span>
+            <b className={`num ${color || ""}`}>{valor}</b>
+            <span className="text-sm muted">{nota}</span>
+          </div>
+        ))}
+      </div>
+
+      <section className="paper p-4">
+        <h2 className="cond text-2xl font-semibold">Cómo sale la ganancia{periodo ? ` de ${nombreMes(periodo).toLowerCase()}` : ""}</h2>
+        <dl className="cuenta-ganancia num">
+          <div><dt>Ventas (con descuento)</dt><dd>{money(tot.venta)}</dd></div>
+          <div><dt>− Costo de los productos</dt><dd>{money(tot.producto)}</dd></div>
+          <div><dt>− Flete (CBM)</dt><dd>{money(tot.flete)}</dd></div>
+          <div><dt>− Comisión ({pct(COMISION)} del costo)</dt><dd>{money(tot.comision)}</dd></div>
+          <div className="total"><dt>= Ganancia</dt><dd className={tot.ganancia >= 0 ? "pos" : "neg"}>{money(tot.ganancia)}</dd></div>
+        </dl>
+      </section>
+
+      {meses.length > 0 && (
+        <section>
+          <h2 className="cond text-2xl font-semibold mb-3">Por mes</h2>
+          <div className="paper tabla-ganancias">
+            <table className="num">
+              <thead><tr><th>Mes</th><th>Cotizaciones</th><th>Ventas</th><th>Costo total</th><th>Ganancia</th><th>Margen</th><th>Cobrado</th></tr></thead>
+              <tbody>
+                {meses.map((m) => {
+                  const l = vendidas.filter((f) => mesDe(f.fechaVenta) === m);
+                  const v = sumar(l, "venta"), g = sumar(l, "ganancia");
+                  return (
+                    <tr key={m}>
+                      <th scope="row"><button className="enlace" onClick={() => { setPeriodo(m); setVerPendientes(false); }}>{nombreMes(m)}</button></th>
+                      <td>{l.length}</td><td>{money(v)}</td><td>{money(v - g)}</td>
+                      <td className={g >= 0 ? "pos" : "neg"}><b>{money(g)}</b></td><td>{v > 0 ? pct(g / v) : "—"}</td><td>{money(sumar(l, "pagado"))}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="section-toolbar">
+          <h2 className="cond text-2xl font-semibold">Por cotización</h2>
+          <div className="filtro-estado" style={{ marginBottom: 0 }} role="group" aria-label="Qué cotizaciones ver">
+            <button type="button" aria-pressed={!verPendientes} onClick={() => setVerPendientes(false)}>Confirmadas ({delPeriodo.length})</button>
+            <button type="button" aria-pressed={verPendientes} onClick={() => setVerPendientes(true)}>Pendientes ({pendientes.length})</button>
+          </div>
+        </div>
+        {visibles.length === 0 ? (
+          <div className="paper p-6 text-center muted">
+            {verPendientes ? "No hay cotizaciones pendientes." : filas.length === 0 ? "Aquí verás tus ganancias cuando tengas cotizaciones." : "Todavía no hay cotizaciones confirmadas en este periodo. Marca una como confirmada en Cotizaciones clientes."}
+          </div>
+        ) : (
+          <div className="paper tabla-ganancias">
+            <table className="num">
+              <thead><tr><th>Cotización</th><th>Estado</th><th>Venta</th><th>Producto</th><th>Flete</th><th>Comisión</th><th>Ganancia</th><th>Margen</th><th>Pagado</th><th>Saldo</th></tr></thead>
+              <tbody>
+                {visibles.map((f) => (
+                  <tr key={f.c.id}>
+                    <th scope="row"><b>{f.c.numero}</b><span>{f.c.cliente || "Sin cliente"} · {soloFecha(f.fechaVenta)}</span></th>
+                    <td><ChipEstado estado={estadoDe(f.c)} /></td>
+                    <td>{money(f.venta)}</td><td>{money(f.producto)}</td><td>{money(f.flete)}</td><td>{money(f.comision)}</td>
+                    <td className={f.ganancia >= 0 ? "pos" : "neg"}><b>{money(f.ganancia)}</b></td><td>{f.venta > 0 ? pct(f.margen) : "—"}</td>
+                    <td>{money(f.pagado)}</td><td>{money(Math.max(0, f.venta - f.pagado))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 const PUERTO_IMG = "https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3?w=1600&q=80&auto=format&fit=crop";
 
 function InicioView({ productos, internas, clientes, empresa, irA }) {
@@ -2474,11 +2634,11 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
             <div className="text-sm muted" style={{ fontWeight: 400 }}>Al catálogo</div>
           </div>
         </button>
-        <button className="quick-btn" onClick={() => irA("internas")}>
+        <button className="quick-btn" onClick={() => irA("ganancias")}>
           <div className="qa-icon" style={{ background: "#F6DDD6", color: "#7A2D1B" }}><DollarSign size={20} /></div>
           <div>
             <div>Ver ganancias</div>
-            <div className="text-sm muted" style={{ fontWeight: 400 }}>Registro interno</div>
+            <div className="text-sm muted" style={{ fontWeight: 400 }}>Por mes y por cotización</div>
           </div>
         </button>
       </div>
@@ -2521,6 +2681,7 @@ const TABS = [
   { id: "directorio", label: "Clientes", icon: Contact },
   { id: "clientes", label: "Cotizaciones clientes", corto: "Cot. clientes", icon: Users },
   { id: "internas", label: "Cotizaciones internas", corto: "Cot. internas", icon: FileTextIcon },
+  { id: "ganancias", label: "Ganancias", icon: TrendingUp },
   { id: "productos", label: "Producto", icon: Package },
   { id: "catalogo-cliente", label: "Catálogo cliente", corto: "Cat. cliente", icon: Tag },
   { id: "catalogo-interno", label: "Catálogo interno", corto: "Cat. interno", icon: BookOpen },
@@ -2694,7 +2855,7 @@ function AdminApp() {
 
   const cambiarTab = (t) => {
     // Al abrir las cotizaciones de clientes se traen las que hayan llegado del catálogo.
-    if ((t === "clientes" || t === "directorio") && supabase) sbLoadCotizacionesClientes().then(async (cc) => {
+    if ((t === "clientes" || t === "directorio" || t === "ganancias") && supabase) sbLoadCotizacionesClientes().then(async (cc) => {
       if (!cc) return;
       const conEnlaces = conEnlacesDeCliente(cc);
       if (conEnlaces && !(await sbSaveCotizacionesClientes(conEnlaces))) { setClientes(cc); return; }
@@ -2773,6 +2934,7 @@ function AdminApp() {
                   <Catalogo modo="cliente" productos={productos} avisar={avisar} whatsapp={empresa.whatsapp}
                     guardarPrecio={guardarPrecioVenta} aplicarGanancia={aplicarGanancia} />
                 )}
+                {tab === "ganancias" && <GananciasView clientes={clientes} />}
                 {tab === "internas" && (
                   <CotizacionInternaView cotiz={internas} guardarCotizaciones={guardarInternas}
                     clientes={clientes} avisar={avisar} empresa={empresa} />
