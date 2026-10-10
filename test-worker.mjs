@@ -62,9 +62,23 @@ globalThis.fetch=async()=>Response.json([]);
 r=await worker.fetch(req('/api/solicitudes/'+guardado.id),env);assert.equal(r.status,404);
 // Estado, pagos y enlace del cliente.
 guardado.totales.estado='produccion';guardado.totales.confirmadaEl='2026-10-01T00:00:00Z';guardado.totales.pagos=[{monto:500},{monto:250}];
-globalThis.fetch=async(url)=>{assert.equal(new URL(url).searchParams.get('totales->contacto->>token'),'eq.'+gc.token);return Response.json([guardado]);};
+guardado.totales.pagos=[{fecha:'2026-10-02T00:00:00Z',monto:500,nota:'Anticipo',id:'x'},{monto:250}];
+const fichaManual={id:'f1',nombre:'Beto',telefono:'7777 1111',tel:'77771111',token:'b'.repeat(32)};
+globalThis.fetch=async(url)=>{const u=new URL(url);if(u.pathname.endsWith('/configuracion'))return Response.json([{valor:[fichaManual]}]);
+  const t=u.searchParams.get('totales->contacto->>token');return Response.json(t==='eq.'+gc.token?[guardado]:[]);};
 r=await worker.fetch(req('/api/cliente/'+gc.token),env);assert.equal(r.status,200);const mias=await r.json();
 assert.equal(mias.nombre,'Ana');assert.equal(mias.cotizaciones[0].estado,'produccion');assert.equal(mias.cotizaciones[0].pagado,750);assert.equal(JSON.stringify(mias).includes('precioProducto'),false);
+assert.deepEqual(mias.cotizaciones[0].pagos[0],{fecha:'2026-10-02T00:00:00Z',monto:500,nota:'Anticipo'});
+// Cliente creado a mano, todavía sin cotizaciones: su enlace existe y está vacío.
+r=await worker.fetch(req('/api/cliente/'+fichaManual.token),env);assert.equal(r.status,200);const beto=await r.json();assert.equal(beto.nombre,'Beto');assert.equal(beto.cotizaciones.length,0);
+r=await worker.fetch(req('/api/cliente/'+'c'.repeat(32)),env);assert.equal(r.status,404);
+// Al cotizar con el teléfono de un cliente creado a mano, la cotización queda en su enlace.
+globalThis.fetch=async(url,init={})=>{const u=new URL(url);
+  if(u.pathname.endsWith('/configuracion'))return Response.json([{valor:[fichaManual]}]);
+  if(u.pathname.endsWith('/productos'))return Response.json([{id:'p1',codigo:'A-1',nombre:'Máquina',cbm:1,peso:0,precio_cbm:1,precio_producto:1,precio_venta:5,foto:''}]);
+  if(init.method==='POST'){guardado=JSON.parse(init.body);return new Response(null,{status:201});}
+  return Response.json([]);};
+r=await pedir({nombre:'Beto',telefono:'7777-1111',lineas:[{codigo:'A-1',cantidad:1}]});assert.equal(r.status,201);assert.equal(guardado.totales.contacto.token,fichaManual.token);assert.equal(guardado.numero,'WEB-0001');
 globalThis.fetch=async()=>Response.json([guardado]);
 r=await worker.fetch(req('/api/solicitudes/'+guardado.id),env);assert.equal(r.status,200);assert.equal((await r.text()).includes('precioProducto'),false);
 console.log('Cotizaciones del catálogo: registro, numeración, validación y vista sin costos.');

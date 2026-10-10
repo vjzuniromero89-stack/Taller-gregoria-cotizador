@@ -427,6 +427,19 @@ async function sbLoadEmpresa() {
   if (error) { console.error(error); return null; }
   return data ? data.valor : null;
 }
+// Clientes creados a mano: se guardan como una lista dentro de la configuración.
+async function sbLoadFichas() {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("configuracion").select("*").eq("clave", "clientes").maybeSingle();
+  if (error) { console.error(error); return null; }
+  return data && Array.isArray(data.valor) ? data.valor : [];
+}
+async function sbSaveFichas(fichas) {
+  if (!supabase) return false;
+  const { error } = await supabase.from("configuracion").upsert({ clave: "clientes", valor: fichas });
+  if (error) { console.error(error); return false; }
+  return true;
+}
 async function sbSaveEmpresa(empresa) {
   if (!supabase) return false;
   const { error } = await supabase.from("configuracion").upsert({ clave: "empresa", valor: empresa });
@@ -1982,7 +1995,7 @@ function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empres
   );
 }
 
-function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas, guardarInternas, avisar, irAProductos, empresa, clienteFijo, onVolver }) {
+function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas, guardarInternas, avisar, irAProductos, empresa, clienteFijo, onVolver, fichas = [] }) {
   // Con clienteFijo (desde la pestaña Clientes) solo se ven y editan las cotizaciones de ese cliente.
   const visibles = useMemo(
     () => (clienteFijo ? cotiz.lista.filter((c) => claveCliente(c) === clienteFijo.clave) : cotiz.lista), [cotiz.lista, clienteFijo]);
@@ -2045,8 +2058,10 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     const contactoPara = (previo) => {
       const digitos = tel.replace(/\D/g, "");
       const mismo = digitos && cotiz.lista.find((c) => c.totales?.contacto?.tel === digitos && c.totales.contacto.token);
-      const token = mismo ? mismo.totales.contacto.token
-        : (previo?.token && (previo.tel || "") === digitos ? previo.token : crypto.randomUUID().replace(/-/g, ""));
+      const ficha = digitos && fichas.find((f) => f.tel === digitos);
+      const delFijo = clienteFijo?.token && (!digitos || digitos === (clienteFijo.tel || "")) ? clienteFijo.token : "";
+      const token = mismo ? mismo.totales.contacto.token : ficha ? ficha.token
+        : (previo?.token && (previo.tel || "") === digitos ? previo.token : delFijo || crypto.randomUUID().replace(/-/g, ""));
       return { origen: "app", ...previo, telefono: tel, tel: digitos, direccion: dir, token };
     };
 
@@ -2219,18 +2234,30 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
   );
 }
 
-/** Clientes: se arma solo a partir de las cotizaciones (mismo teléfono = mismo cliente). */
-function ClientesView({ clientes, avisar, vistaCotizaciones }) {
+/** Clientes: los que creas a mano más los que salen de las cotizaciones (mismo teléfono = mismo cliente). */
+function ClientesView({ clientes, fichas, guardarFichas, avisar, vistaCotizaciones }) {
+  const FICHA_NUEVA = { nombre: "", telefono: "", direccion: "" };
   const [q, setQ] = useState("");
   const [viendo, setViendo] = useState(null);
+  const [form, setForm] = useState(FICHA_NUEVA);
+  const [editId, setEditId] = useState(null);
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [confirmar, setConfirmar] = useState(null);
+
   const lista = useMemo(() => {
     const grupos = new Map();
+    const nuevo = (clave, datos) => ({ clave, nombre: "Sin nombre", telefono: "", tel: "", direccion: "", token: "", ficha: null, cotizaciones: [], comprado: 0, saldo: 0, ...datos });
+    for (const f of fichas) {
+      const clave = f.tel || f.token;
+      grupos.set(clave, nuevo(clave, { nombre: f.nombre, telefono: f.telefono, tel: f.tel, direccion: f.direccion, token: f.token, ficha: f }));
+    }
     for (const c of [...clientes.lista].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))) {
       const contacto = c.totales?.contacto || {};
       const clave = claveCliente(c);
       if (!grupos.has(clave)) {
-        grupos.set(clave, { clave, nombre: c.cliente || "Sin nombre", telefono: contacto.telefono || "", direccion: contacto.direccion || "",
-          token: contacto.token || "", cotizaciones: [], comprado: 0, saldo: 0 });
+        grupos.set(clave, nuevo(clave, { nombre: c.cliente || "Sin nombre", telefono: contacto.telefono || "", tel: contacto.tel || "",
+          direccion: contacto.direccion || "", token: contacto.token || "" }));
       }
       const g = grupos.get(clave);
       g.cotizaciones.push(c);
@@ -2239,13 +2266,44 @@ function ClientesView({ clientes, avisar, vistaCotizaciones }) {
       if (!g.token) g.token = contacto.token || "";
       if (esVendida(c)) { g.comprado += totalDeCliente(c); g.saldo += Math.max(0, totalDeCliente(c) - pagadoDe(c)); }
     }
-    return [...grupos.values()];
-  }, [clientes.lista]);
+    return [...grupos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [clientes.lista, fichas]);
   const filtrados = lista.filter((g) => `${g.nombre} ${g.telefono} ${g.direccion}`.toLowerCase().includes(q.trim().toLowerCase()));
   const copiar = async (texto) => {
     try { await navigator.clipboard.writeText(texto); avisar("Enlace copiado"); }
     catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
   };
+  const set = (k) => (e) => { setError(""); setForm((f) => ({ ...f, [k]: e.target.value })); };
+  const limpiar = () => { setForm(FICHA_NUEVA); setEditId(null); setError(""); };
+
+  async function guardar() {
+    const nombre = form.nombre.trim(), telefono = form.telefono.trim(), direccion = form.direccion.trim();
+    const tel = telefono.replace(/\D/g, "");
+    if (!nombre) { setError("Escribe el nombre del cliente."); return; }
+    if (telefono && tel.length < 8) { setError("El teléfono debe tener al menos 8 dígitos."); return; }
+    const repetido = tel && lista.find((g) => g.tel === tel && (!editId || g.ficha?.id !== editId));
+    if (repetido && (repetido.ficha || !editId)) {
+      if (repetido.ficha) { setError(`Ya tienes un cliente con ese teléfono: ${repetido.nombre}.`); return; }
+    }
+    const previa = editId ? fichas.find((f) => f.id === editId) : null;
+    // Si ese teléfono ya tiene cotizaciones, el cliente conserva el enlace que ya tenía.
+    const token = (repetido && repetido.token) || (previa && previa.tel === tel && previa.token) || previa?.token || crypto.randomUUID().replace(/-/g, "");
+    const ficha = { id: previa?.id || uid(), nombre, telefono, tel, direccion, token, creado: previa?.creado || new Date().toISOString() };
+    setGuardando(true);
+    const ok = await guardarFichas(previa ? fichas.map((f) => (f.id === previa.id ? ficha : f)) : [ficha, ...fichas]);
+    setGuardando(false);
+    if (ok) { avisar(previa ? "Cliente actualizado" : "Cliente guardado con su enlace propio"); limpiar(); }
+  }
+  function editar(f) {
+    setForm({ nombre: f.nombre, telefono: f.telefono, direccion: f.direccion }); setEditId(f.id); setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async function eliminar(f) {
+    setGuardando(true);
+    const ok = await guardarFichas(fichas.filter((x) => x.id !== f.id));
+    setGuardando(false);
+    if (ok) { avisar("Cliente eliminado"); setConfirmar(null); if (editId === f.id) limpiar(); }
+  }
 
   // Las cotizaciones de un cliente se ven y se editan aquí mismo, sin salir de Clientes.
   const elegido = viendo && lista.find((g) => g.clave === viendo);
@@ -2254,7 +2312,36 @@ function ClientesView({ clientes, avisar, vistaCotizaciones }) {
   return (
     <div className="space-y-6">
       <EncabezadoPagina icon={Contact} titulo="Clientes"
-        descripcion="Se llena solo con cada cotización. Cada cliente tiene un enlace propio donde ve el estado de sus pedidos." />
+        descripcion="Crea clientes o deja que se agreguen solos con cada cotización. Cada uno tiene un enlace propio donde ve el estado de sus pedidos." />
+
+      <section className="form-card">
+        <h2 className="cond text-2xl font-semibold mb-3">{editId ? "Editar cliente" : "Nuevo cliente"}</h2>
+        <div className="form-producto">
+          <div className="form-grid-2">
+            <div>
+              <label className="lbl" htmlFor="cl-nombre">Nombre</label>
+              <input id="cl-nombre" className="inp" value={form.nombre} onChange={set("nombre")} />
+            </div>
+            <div>
+              <label className="lbl" htmlFor="cl-telefono">Teléfono o WhatsApp</label>
+              <input id="cl-telefono" className="inp num" inputMode="tel" placeholder="8888 8888" value={form.telefono} onChange={set("telefono")} />
+            </div>
+          </div>
+          <div>
+            <label className="lbl" htmlFor="cl-direccion">Ciudad o dirección</label>
+            <input id="cl-direccion" className="inp" placeholder="Managua, barrio o dirección" value={form.direccion} onChange={set("direccion")} />
+          </div>
+          <p className="text-sm muted" style={{ lineHeight: 1.3 }}>Al guardar se crea su enlace propio. Con el teléfono, sus cotizaciones se juntan solas en ese enlace.</p>
+          {error && <p className="text-sm font-medium" style={{ color: "#A3321F" }} role="alert">{error}</p>}
+          <div className="form-acciones">
+            <button className="btn btn-primary" onClick={guardar} disabled={guardando}>
+              {guardando ? "Guardando…" : editId ? "Guardar cambios" : "Guardar cliente"}
+            </button>
+            {editId && <button className="btn btn-ghost" onClick={limpiar}>Cancelar</button>}
+          </div>
+        </div>
+      </section>
+
       <section>
         <div className="section-toolbar">
           <h2 className="cond text-2xl font-semibold">Clientes <span className="muted font-medium">({lista.length})</span></h2>
@@ -2267,7 +2354,7 @@ function ClientesView({ clientes, avisar, vistaCotizaciones }) {
           )}
         </div>
         {lista.length === 0 ? (
-          <div className="paper p-6 text-center muted">Aquí aparecerán tus clientes cuando registres o recibas la primera cotización.</div>
+          <div className="paper p-6 text-center muted">Guarda tu primer cliente con el formulario de arriba, o espera la primera cotización.</div>
         ) : filtrados.length === 0 ? (
           <div className="paper p-6 text-center muted">Ningún cliente coincide con “{q}”.</div>
         ) : (
@@ -2284,29 +2371,40 @@ function ClientesView({ clientes, avisar, vistaCotizaciones }) {
                         {g.telefono || "Sin teléfono"}{g.direccion ? ` · ${g.direccion}` : ""}
                       </div>
                     </div>
-                    <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                    <div className="flex gap-2 items-center" style={{ flexWrap: "wrap" }}>
                       {pendientes > 0 && <span className="chip">{pendientes} {pendientes === 1 ? "pendiente" : "pendientes"}</span>}
                       {g.saldo > 0 && <span className="chip chip-info num">Debe {money(g.saldo)}</span>}
+                      {g.ficha && <>
+                        <button className="icon-btn" onClick={() => editar(g.ficha)} aria-label={`Editar ${g.nombre}`}><Pencil size={17} /></button>
+                        {g.cotizaciones.length === 0 && (
+                          <button className="icon-btn" onClick={() => setConfirmar(g.ficha.id)} aria-label={`Eliminar ${g.nombre}`}><Trash2 size={17} /></button>
+                        )}
+                      </>}
                     </div>
                   </div>
+                  {g.ficha && confirmar === g.ficha.id && (
+                    <div className="flex items-center gap-2 mt-3">
+                      <span className="text-sm flex-1">¿Eliminar este cliente? Su enlace dejará de funcionar.</span>
+                      <button className="btn btn-ghost text-sm" style={{ padding: "6px 12px" }} onClick={() => setConfirmar(null)}>No</button>
+                      <button className="btn btn-danger-solid text-sm" style={{ padding: "6px 12px" }} disabled={guardando} onClick={() => eliminar(g.ficha)}>Eliminar</button>
+                    </div>
+                  )}
                   <div className="pagos-resumen">
                     <div><span className="lbl">Cotizaciones</span><b className="num">{g.cotizaciones.length}</b></div>
                     <div><span className="lbl">Comprado (confirmadas)</span><b className="num">{money(g.comprado)}</b></div>
                     <div className={`saldo ${g.saldo <= 0 ? "cero" : ""}`}><span className="lbl">Saldo</span><b className="num">{money(g.saldo)}</b></div>
                   </div>
                   <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
-                    {enlace
-                      ? <button className="btn btn-primary" onClick={() => copiar(enlace)}><Share2 size={16} />Copiar su enlace</button>
-                      : <span className="text-sm muted" style={{ alignSelf: "center" }}>Sin enlace propio: edita una de sus cotizaciones y guárdala para crearlo.</span>}
+                    {enlace && <button className="btn btn-primary" onClick={() => copiar(enlace)}><Share2 size={16} />Copiar su enlace</button>}
                     {enlace && <a className="btn btn-ghost" style={{ textDecoration: "none" }} href={enlace} target="_blank" rel="noopener noreferrer"><Eye size={16} />Ver como cliente</a>}
                     {numeroWhatsapp(g.telefono) && (
                       <a className="btn btn-ghost" style={{ textDecoration: "none" }} target="_blank" rel="noopener noreferrer"
-                        href={`https://wa.me/${numeroWhatsapp(g.telefono)}${enlace ? `?text=${encodeURIComponent(`Hola ${g.nombre}, en este enlace puede ver el estado de sus pedidos:\n${enlace}`)}` : ""}`}>
+                        href={`https://wa.me/${numeroWhatsapp(g.telefono)}${enlace ? `?text=${encodeURIComponent(`Hola ${g.nombre}, en este enlace puede ver nuestro catálogo y el estado de sus pedidos:\n${enlace}`)}` : ""}`}>
                         Enviarle su enlace por WhatsApp
                       </a>
                     )}
                     <button className="btn btn-ghost" onClick={() => { setViendo(g.clave); window.scrollTo({ top: 0 }); }}>
-                      <Pencil size={16} />Ver y editar sus cotizaciones
+                      <Pencil size={16} />{g.cotizaciones.length ? "Ver y editar sus cotizaciones" : "Hacerle una cotización"}
                     </button>
                   </div>
                 </article>
@@ -2447,6 +2545,7 @@ function AdminApp() {
   const [internas, setInternas] = useState(VACIA);
   const [clientes, setClientes] = useState(VACIA);
   const [empresa, setEmpresa] = useState(EMPRESA_POR_DEFECTO);
+  const [fichas, setFichas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [online, setOnline] = useState(!!supabase);
   const [toast, setToast] = useState(null);
@@ -2472,6 +2571,8 @@ function AdminApp() {
           localLoad("empresa", EMPRESA_POR_DEFECTO),
         ]);
       }
+      const fi = (supabase && p != null ? await sbLoadFichas() : null) ?? await localLoad("clientesFichas", []);
+      setFichas(Array.isArray(fi) ? fi : []);
       setProductos(Array.isArray(p) ? p : []);
       setEmpresa(em && typeof em === "object"
         ? {
@@ -2562,6 +2663,12 @@ function AdminApp() {
       const ok = await sbSaveCotizacionesClientes(data, quitadas);
       if (!ok) { avisar("No se pudo registrar la cotización en la nube.", "error"); return false; }
     }
+    return true;
+  };
+  const guardarFichas = async (data) => {
+    setFichas(data);
+    await localSave("clientesFichas", data);
+    if (supabase && !(await sbSaveFichas(data))) { avisar("No se pudo guardar el cliente en la nube.", "error"); return false; }
     return true;
   };
   const guardarEmpresa = async (data) => {
@@ -2660,16 +2767,16 @@ function AdminApp() {
                     clientes={clientes} avisar={avisar} empresa={empresa} />
                 )}
                 {tab === "directorio" && (
-                  <ClientesView clientes={clientes} avisar={avisar}
+                  <ClientesView clientes={clientes} fichas={fichas} guardarFichas={guardarFichas} avisar={avisar}
                     vistaCotizaciones={(clienteFijo, onVolver) => (
-                      <CotizacionClienteView key={clienteFijo.clave} clienteFijo={clienteFijo} onVolver={onVolver}
+                      <CotizacionClienteView key={clienteFijo.clave} clienteFijo={clienteFijo} onVolver={onVolver} fichas={fichas}
                         productos={productos} cotiz={clientes} guardarCotizaciones={guardarClientes}
                         internas={internas} guardarInternas={guardarInternas} avisar={avisar}
                         irAProductos={irAProductos} empresa={empresa} />
                     )} />
                 )}
                 {tab === "clientes" && (
-                  <CotizacionClienteView productos={productos} cotiz={clientes} guardarCotizaciones={guardarClientes}
+                  <CotizacionClienteView fichas={fichas} productos={productos} cotiz={clientes} guardarCotizaciones={guardarClientes}
                     internas={internas} guardarInternas={guardarInternas} avisar={avisar}
                     irAProductos={irAProductos} empresa={empresa} />
                 )}

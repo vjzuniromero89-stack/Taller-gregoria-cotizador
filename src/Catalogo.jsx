@@ -239,6 +239,13 @@ const ESTILOS = `
 .cat-pasos li.actual .cat-paso-punto { background:#F2B705; color:#14222B; box-shadow:0 0 0 5px rgba(242,183,5,.28); }
 .cat-pasos li.hecho, .cat-pasos li.actual { color:#14222B; }
 .cat-paso-nombre { overflow-wrap:anywhere; line-height:1.2; }
+.cat-pagos { margin-top:14px; border:1px solid #E6ECEF; border-radius:12px; padding:12px 14px; }
+.cat-pagos > b { font-family:'Barlow Condensed',sans-serif; font-size:20px; }
+.cat-pagos ul { list-style:none; margin:6px 0 0; padding:0; }
+.cat-pagos li { display:flex; gap:10px; align-items:baseline; padding:7px 0; border-top:1px solid #EEF2F4; font-size:15px; }
+.cat-pagos li:first-child { border-top:0; }
+.cat-pagos li span:first-child { color:#5B6B75; flex-shrink:0; }
+.cat-pago-nota { flex:1; min-width:0; overflow-wrap:anywhere; }
 .cat-seg-nota { margin:14px 0 0; font-size:13px; color:#5B6B75; }
 .cat-estado { display:inline-flex; border-radius:999px; padding:2px 11px; font-size:13px; font-weight:700; background:#FFF4CC; color:#7A5A00; }
 .cat-estado-confirmada, .cat-estado-entregada { background:#DDF3E6; color:#14603A; }
@@ -748,7 +755,7 @@ function CotizacionLista({ cot, empresa, alTerminar }) {
   );
 }
 
-function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
+function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar, token }) {
   const [datos, setDatos] = useState(() => ({ nombre: "", telefono: "", direccion: "", ...leerGuardado(`${CLAVE_PEDIDO}-datos`, {}) }));
   const [nota, setNota] = useState("");
   const [error, setError] = useState("");
@@ -777,7 +784,7 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
     try {
       const res = await fetch("/api/solicitudes", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ nombre, telefono, direccion, nota: nota.trim(), lineas: lineas.map((l) => ({ codigo: l.codigo, cantidad: l.cantidad })) }),
+        body: JSON.stringify({ nombre, telefono, direccion, token: token || "", nota: nota.trim(), lineas: lineas.map((l) => ({ codigo: l.codigo, cantidad: l.cantidad })) }),
       });
       const r = await res.json().catch(() => ({}));
       if (!res.ok || !r.cotizacion) throw new Error(r.error || "sin respuesta");
@@ -937,6 +944,20 @@ function Seguimiento({ cot }) {
           <div className="cat-dato cobro"><small>Saldo</small><b className="cat-num">{dinero(saldo)}</b></div>
         </div>
       )}
+      {cot.pagos?.length > 0 && (
+        <div className="cat-pagos">
+          <b>Pagos recibidos</b>
+          <ul>
+            {cot.pagos.map((p, i) => (
+              <li key={i}>
+                <span className="cat-num">{p.fecha ? fechaCorta(p.fecha) : "Sin fecha"}</span>
+                <span className="cat-pago-nota">{p.nota || "Pago"}</span>
+                <b className="cat-num">{dinero(p.monto)}</b>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p className="cat-seg-nota">Esta página se actualiza sola. Guarda el enlace para revisar tu pedido cuando quieras.</p>
     </section>
   );
@@ -1003,7 +1024,8 @@ export function VistaCliente({ token }) {
         {estado === "no-existe" ? "Todavía no hay cotizaciones en este enlace." : AVISOS[estado] || AVISOS.cargando}
       </div> : <>
         <p className="cat-cuenta" style={{ marginTop: 0 }}>
-          {lista.length === 1 ? "Tienes 1 cotización." : `Tienes ${lista.length} cotizaciones.`} Esta página se actualiza sola.
+          {lista.length === 0 ? "Todavía no tienes cotizaciones. Abre la pestaña Catálogo, agrega los equipos que te interesan y envía tu cotización."
+            : `${lista.length === 1 ? "Tienes 1 cotización." : `Tienes ${lista.length} cotizaciones.`} Esta página se actualiza sola.`}
         </p>
         <div className="cat-mis">
           {lista.map((cot) => {
@@ -1029,7 +1051,7 @@ export function VistaCliente({ token }) {
       </>}
     </section>
   );
-  return <Catalogo modo="cliente" cuenta={{ titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, contenido: arriba, cantidad: lista.length }} />;
+  return <Catalogo modo="cliente" cuenta={{ token, titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, contenido: arriba, cantidad: lista.length }} />;
 }
 
 const RUTAS = { cliente: "/catalogo", interno: "/catalogo-interno" };
@@ -1210,7 +1232,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
           <b>Ver y enviar</b>
         </button>
       )}
-      {pedir && panel && <PanelCotizacion lineas={lineas} cambiar={cambiarPedido} vaciar={vaciarPedido} empresa={empresa} cerrar={cerrarPanel} />}
+      {pedir && panel && <PanelCotizacion lineas={lineas} cambiar={cambiarPedido} vaciar={vaciarPedido} empresa={empresa} cerrar={cerrarPanel} token={cuenta?.token} />}
     </div>
   );
 }

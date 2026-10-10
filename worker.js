@@ -38,6 +38,13 @@ const KG_POR_CBM = 350;
 const MINIMO_CBM = 1; // el transporte cobra como mínimo 1 CBM por cada máquina
 const texto = (valor, maximo) => String(valor ?? "").replace(/\s+/g, " ").trim().slice(0, maximo);
 
+/** Clientes creados a mano en la app (nombre, teléfono y su enlace). */
+async function fichasDeClientes(env) {
+  const r = await sbRequest(env, "configuracion?clave=eq.clientes&select=valor&limit=1");
+  const valor = r.ok && Array.isArray(r.data) ? r.data[0]?.valor : null;
+  return Array.isArray(valor) ? valor : [];
+}
+
 /** Lo que el cliente puede ver de su cotización: nunca costos ni flete. */
 function cotizacionPublica(fila) {
   const contacto = fila.totales?.contacto || {};
@@ -47,6 +54,7 @@ function cotizacionPublica(fila) {
     token: contacto.token || "", estado: fila.totales?.estado || "pendiente",
     confirmadaEl: fila.totales?.confirmadaEl || null, entregadaEl: fila.totales?.entregadaEl || null,
     pagado: (Array.isArray(fila.totales?.pagos) ? fila.totales.pagos : []).reduce((s, p) => s + (Number(p.monto) || 0), 0),
+    pagos: (Array.isArray(fila.totales?.pagos) ? fila.totales.pagos : []).map((p) => ({ fecha: p.fecha || null, monto: Number(p.monto) || 0, nota: String(p.nota || "") })),
     lineas: (Array.isArray(fila.lineas) ? fila.lineas : []).map((l) => ({
       codigo: l.codigo, nombre: l.nombre, cantidad: Number(l.cantidad) || 0, precio: Number(l.precioVenta) || 0, foto: l.foto || "",
     })),
@@ -122,7 +130,19 @@ export default {
       const tel = telefono.replace(/\D/g, "");
       const previa = await sbRequest(env, `cotizaciones_clientes?select=totales&totales-%3Econtacto-%3E%3Etel=eq.${tel}&order=fecha.desc&limit=1`);
       const tokenPrevio = previa.ok && Array.isArray(previa.data) ? previa.data[0]?.totales?.contacto?.token : "";
-      const token = /^[0-9a-f]{32}$/.test(tokenPrevio || "") ? tokenPrevio : crypto.randomUUID().replace(/-/g, "");
+      // Enlace del cliente: el de la cuenta desde la que cotiza, el que ya tenía ese teléfono, o uno nuevo.
+      const esToken = (v) => /^[0-9a-f]{32}$/.test(v || "");
+      let token = "";
+      const fichas = await fichasDeClientes(env);
+      const pedido = String(cuerpo?.token || "");
+      if (esToken(pedido)) {
+        const conEse = fichas.some((f) => f.token === pedido) ? { ok: true, data: [1] }
+          : await sbRequest(env, `cotizaciones_clientes?select=id&totales-%3Econtacto-%3E%3Etoken=eq.${pedido}&limit=1`);
+        if (conEse.ok && Array.isArray(conEse.data) && conEse.data.length) token = pedido;
+      }
+      if (!token && esToken(tokenPrevio)) token = tokenPrevio;
+      if (!token) token = fichas.find((f) => f.tel && f.tel === tel)?.token || "";
+      if (!esToken(token)) token = crypto.randomUUID().replace(/-/g, "");
 
       const ultima = await sbRequest(env, "cotizaciones_clientes?select=numero&numero=like.WEB-*&order=numero.desc&limit=1");
       if (!ultima.ok) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
@@ -162,8 +182,9 @@ export default {
     if (tokenCliente) {
       const r = await sbRequest(env, `cotizaciones_clientes?select=id,numero,fecha,cliente,total_final,lineas,totales&totales-%3Econtacto-%3E%3Etoken=eq.${tokenCliente}&order=fecha.desc&limit=100`);
       if (!r.ok || !Array.isArray(r.data)) return json({ ok: false, error: "No se pudo cargar." }, 503);
-      if (!r.data.length) return json({ ok: false, error: "No existe." }, 404);
-      return json({ ok: true, nombre: r.data[0].cliente || "", cotizaciones: r.data.map(cotizacionPublica) });
+      const ficha = (await fichasDeClientes(env)).find((f) => f.token === tokenCliente);
+      if (!r.data.length && !ficha) return json({ ok: false, error: "No existe." }, 404);
+      return json({ ok: true, nombre: ficha?.nombre || r.data[0]?.cliente || "", cotizaciones: r.data.map(cotizacionPublica) });
     }
 
     // Catálogo para clientes: solo precio de venta, nunca costos. Catálogo interno: costos, flete y CBM.

@@ -24,6 +24,7 @@ const apiDePrueba = {
         ultima.estado = q.get("estado") || "pendiente";
         ultima.confirmadaEl = ultima.estado === "pendiente" ? null : new Date().toISOString();
         ultima.pagado = Number(q.get("pagado")) || 0;
+        ultima.pagos = ultima.pagado ? [{ fecha: new Date().toISOString(), monto: ultima.pagado, nota: "Anticipo" }] : [];
       }
       responder(res, { ok: Boolean(ultima) });
     });
