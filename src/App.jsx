@@ -524,6 +524,11 @@ const soloFecha = (d) => new Date(d).toLocaleDateString("es", { day: "2-digit", 
 const entregaEstimada = (c) => (c?.totales?.confirmadaEl
   ? new Date(new Date(c.totales.confirmadaEl).getTime() + (DIAS_PRODUCCION + DIAS_ENVIO) * 86400000) : null);
 
+const claveCliente = (c) => {
+  const k = c.totales?.contacto || {};
+  return k.tel || k.token || `nombre:${(c.cliente || "Sin nombre").trim().toLowerCase()}`;
+};
+
 const conEnlacesDeCliente = (estado) => {
   const porTelefono = new Map();
   for (const c of estado.lista) {
@@ -1977,19 +1982,25 @@ function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empres
   );
 }
 
-function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas, guardarInternas, avisar, irAProductos, empresa }) {
-  const [cliente, setCliente] = useState("");
+function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas, guardarInternas, avisar, irAProductos, empresa, clienteFijo, onVolver }) {
+  // Con clienteFijo (desde la pestaña Clientes) solo se ven y editan las cotizaciones de ese cliente.
+  const visibles = useMemo(
+    () => (clienteFijo ? cotiz.lista.filter((c) => claveCliente(c) === clienteFijo.clave) : cotiz.lista), [cotiz.lista, clienteFijo]);
+  const [cliente, setCliente] = useState(clienteFijo?.nombre || "");
   const [lineas, setLineas] = useState([]);
   const [detalle, setDetalle] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [descuento, setDescuento] = useState("0");
-  const [telefono, setTelefono] = useState("");
-  const [direccion, setDireccion] = useState("");
+  const [telefono, setTelefono] = useState(clienteFijo?.telefono || "");
+  const [direccion, setDireccion] = useState(clienteFijo?.direccion || "");
   const [editId, setEditId] = useState(null);
   const enEdicion = editId ? cotiz.lista.find((c) => c.id === editId) : null;
 
-  const limpiarFormulario = () => { setEditId(null); setLineas([]); setCliente(""); setTelefono(""); setDireccion(""); setDescuento("0"); setError(""); };
+  const limpiarFormulario = () => {
+    setEditId(null); setLineas([]); setDescuento("0"); setError("");
+    setCliente(clienteFijo?.nombre || ""); setTelefono(clienteFijo?.telefono || ""); setDireccion(clienteFijo?.direccion || "");
+  };
   function editar(c) {
     setEditId(c.id); setCliente(c.cliente || ""); setTelefono(c.totales?.contacto?.telefono || ""); setDireccion(c.totales?.contacto?.direccion || ""); setDescuento(String(c.descuento || 0));
     setLineas(c.lineas.map((l) => ({ ...l, cantidad: String(l.cantidad), precioVenta: num(l.precioVenta) > 0 ? String(l.precioVenta) : "" })));
@@ -2111,10 +2122,16 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
 
   return (
     <div className="space-y-6">
-      <EncabezadoPagina icon={Users} titulo="Cotizaciones clientes"
-        descripcion="Prepara cotizaciones, aplica descuentos y comparte documentos profesionales con tus clientes." />
+      {clienteFijo ? <>
+        <button className="btn btn-ghost" onClick={onVolver}>← Volver a Clientes</button>
+        <EncabezadoPagina icon={Contact} titulo={`Cotizaciones de ${clienteFijo.nombre}`}
+          descripcion="Abre una cotización para cambiar su estado, registrar pagos o editarla. También puedes hacerle una nueva." />
+      </> : (
+        <EncabezadoPagina icon={Users} titulo="Cotizaciones clientes"
+          descripcion="Prepara cotizaciones, aplica descuentos y comparte documentos profesionales con tus clientes." />
+      )}
       <section className="paper p-4">
-        <h2 className="cond text-2xl font-semibold mb-3">{enEdicion ? `Editar cotización ${enEdicion.numero}` : "Nueva cotización para cliente"}</h2>
+        <h2 className="cond text-2xl font-semibold mb-3">{enEdicion ? `Editar cotización ${enEdicion.numero}` : clienteFijo ? `Nueva cotización para ${clienteFijo.nombre}` : "Nueva cotización para cliente"}</h2>
         {productos.length === 0 ? <SinProductos irAProductos={irAProductos} /> : (
           <>
             <div className="form-grid-2 mb-3">
@@ -2187,7 +2204,7 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
       </section>
 
       <ListaRegistradas
-        lista={cotiz.lista}
+        lista={visibles}
         onOpen={setDetalle}
         totalDe={(c) => c.totalFinal ?? c.totales.totalFinal ?? c.totales.totalVenta}
         conEstado
@@ -2203,14 +2220,14 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
 }
 
 /** Clientes: se arma solo a partir de las cotizaciones (mismo teléfono = mismo cliente). */
-function ClientesView({ clientes, avisar, irA }) {
+function ClientesView({ clientes, avisar, vistaCotizaciones }) {
   const [q, setQ] = useState("");
-  const [abierto, setAbierto] = useState(null);
+  const [viendo, setViendo] = useState(null);
   const lista = useMemo(() => {
     const grupos = new Map();
     for (const c of [...clientes.lista].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))) {
       const contacto = c.totales?.contacto || {};
-      const clave = contacto.tel || contacto.token || `nombre:${(c.cliente || "Sin nombre").trim().toLowerCase()}`;
+      const clave = claveCliente(c);
       if (!grupos.has(clave)) {
         grupos.set(clave, { clave, nombre: c.cliente || "Sin nombre", telefono: contacto.telefono || "", direccion: contacto.direccion || "",
           token: contacto.token || "", cotizaciones: [], comprado: 0, saldo: 0 });
@@ -2229,6 +2246,10 @@ function ClientesView({ clientes, avisar, irA }) {
     try { await navigator.clipboard.writeText(texto); avisar("Enlace copiado"); }
     catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
   };
+
+  // Las cotizaciones de un cliente se ven y se editan aquí mismo, sin salir de Clientes.
+  const elegido = viendo && lista.find((g) => g.clave === viendo);
+  if (elegido) return vistaCotizaciones(elegido, () => setViendo(null));
 
   return (
     <div className="space-y-6">
@@ -2284,23 +2305,10 @@ function ClientesView({ clientes, avisar, irA }) {
                         Enviarle su enlace por WhatsApp
                       </a>
                     )}
-                    <button className="btn btn-ghost" onClick={() => setAbierto(abierto === g.clave ? null : g.clave)} aria-expanded={abierto === g.clave}>
-                      {abierto === g.clave ? "Ocultar cotizaciones" : "Ver cotizaciones"}
+                    <button className="btn btn-ghost" onClick={() => { setViendo(g.clave); window.scrollTo({ top: 0 }); }}>
+                      <Pencil size={16} />Ver y editar sus cotizaciones
                     </button>
                   </div>
-                  {abierto === g.clave && (
-                    <ul className="mt-3" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                      {g.cotizaciones.map((c) => (
-                        <li key={c.id} className="flex items-center gap-2 row-line text-sm" style={{ padding: "8px 0", flexWrap: "wrap" }}>
-                          <span className="num font-semibold">{c.numero}</span>
-                          <ChipEstado estado={estadoDe(c)} />
-                          <span className="muted flex-1">{soloFecha(c.fecha)}</span>
-                          <span className="num font-semibold">{money(totalDeCliente(c))}</span>
-                        </li>
-                      ))}
-                      <li style={{ paddingTop: 8 }}><button className="btn btn-ghost text-sm" onClick={() => irA("clientes")}>Ir a Cotizaciones clientes</button></li>
-                    </ul>
-                  )}
                 </article>
               );
             })}
@@ -2651,7 +2659,15 @@ function AdminApp() {
                   <CotizacionInternaView cotiz={internas} guardarCotizaciones={guardarInternas}
                     clientes={clientes} avisar={avisar} empresa={empresa} />
                 )}
-                {tab === "directorio" && <ClientesView clientes={clientes} avisar={avisar} irA={cambiarTab} />}
+                {tab === "directorio" && (
+                  <ClientesView clientes={clientes} avisar={avisar}
+                    vistaCotizaciones={(clienteFijo, onVolver) => (
+                      <CotizacionClienteView key={clienteFijo.clave} clienteFijo={clienteFijo} onVolver={onVolver}
+                        productos={productos} cotiz={clientes} guardarCotizaciones={guardarClientes}
+                        internas={internas} guardarInternas={guardarInternas} avisar={avisar}
+                        irAProductos={irAProductos} empresa={empresa} />
+                    )} />
+                )}
                 {tab === "clientes" && (
                   <CotizacionClienteView productos={productos} cotiz={clientes} guardarCotizaciones={guardarClientes}
                     internas={internas} guardarInternas={guardarInternas} avisar={avisar}
