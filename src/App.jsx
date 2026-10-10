@@ -2671,6 +2671,22 @@ function AdminApp() {
     if (supabase && !(await sbSaveFichas(data))) { avisar("No se pudo guardar el cliente en la nube.", "error"); return false; }
     return true;
   };
+  // Cada cliente que llega con una cotización queda guardado como cliente propio,
+  // para que siga en la pestaña Clientes aunque después se borre su cotización.
+  useEffect(() => {
+    if (cargando) return;
+    const nuevas = [];
+    for (const c of clientes.lista) {
+      const k = c.totales?.contacto;
+      if (!k?.token) continue;
+      const yaEsta = (f) => f.token === k.token || (k.tel && f.tel === k.tel);
+      if (fichas.some(yaEsta) || nuevas.some(yaEsta)) continue;
+      nuevas.push({ id: uid(), nombre: c.cliente || "Sin nombre", telefono: k.telefono || "", tel: k.tel || "",
+        direccion: k.direccion || "", token: k.token, creado: c.fecha });
+    }
+    if (nuevas.length) guardarFichas([...nuevas, ...fichas]);
+  }, [cargando, clientes.lista, fichas]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const guardarEmpresa = async (data) => {
     setEmpresa(data);
     await localSave("empresa", data);
