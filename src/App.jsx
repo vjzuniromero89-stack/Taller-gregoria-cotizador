@@ -524,6 +524,25 @@ const soloFecha = (d) => new Date(d).toLocaleDateString("es", { day: "2-digit", 
 const entregaEstimada = (c) => (c?.totales?.confirmadaEl
   ? new Date(new Date(c.totales.confirmadaEl).getTime() + (DIAS_PRODUCCION + DIAS_ENVIO) * 86400000) : null);
 
+const conEnlacesDeCliente = (estado) => {
+  const porTelefono = new Map();
+  for (const c of estado.lista) {
+    const k = c.totales?.contacto;
+    if (k?.tel && k.token) porTelefono.set(k.tel, k.token);
+  }
+  let cambio = false;
+  const lista = estado.lista.map((c) => {
+    const k = c.totales?.contacto || {};
+    if (k.token) return c;
+    const tel = String(k.telefono || "").replace(/\D/g, "");
+    const token = (tel && porTelefono.get(tel)) || crypto.randomUUID().replace(/-/g, "");
+    if (tel) porTelefono.set(tel, token);
+    cambio = true;
+    return { ...c, totales: { ...c.totales, contacto: { origen: "app", ...k, telefono: k.telefono || "", tel, token } } };
+  });
+  return cambio ? { ...estado, lista } : null;
+};
+
 const siguienteNumero = (prefijo, contador) => `${prefijo}-${String(contador).padStart(4, "0")}`;
 
 const calcLinea = (l) => {
@@ -2405,12 +2424,12 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
 const VACIA = { contador: 0, lista: [] };
 const TABS = [
   { id: "inicio", label: "Inicio", icon: Home },
-  { id: "productos", label: "Producto", icon: Package },
-  { id: "catalogo-interno", label: "Catálogo interno", corto: "Cat. interno", icon: BookOpen },
-  { id: "catalogo-cliente", label: "Catálogo cliente", corto: "Cat. cliente", icon: Tag },
-  { id: "internas", label: "Cotizaciones internas", corto: "Cot. internas", icon: FileTextIcon },
-  { id: "clientes", label: "Cotizaciones clientes", corto: "Cot. clientes", icon: Users },
   { id: "directorio", label: "Clientes", icon: Contact },
+  { id: "clientes", label: "Cotizaciones clientes", corto: "Cot. clientes", icon: Users },
+  { id: "internas", label: "Cotizaciones internas", corto: "Cot. internas", icon: FileTextIcon },
+  { id: "productos", label: "Producto", icon: Package },
+  { id: "catalogo-cliente", label: "Catálogo cliente", corto: "Cat. cliente", icon: Tag },
+  { id: "catalogo-interno", label: "Catálogo interno", corto: "Cat. interno", icon: BookOpen },
 ];
 
 function AdminApp() {
@@ -2455,7 +2474,14 @@ function AdminApp() {
           }
         : EMPRESA_POR_DEFECTO);
       setInternas(ci && Array.isArray(ci.lista) ? ci : VACIA);
-      setClientes(cc && Array.isArray(cc.lista) ? cc : VACIA);
+      let listaClientes = cc && Array.isArray(cc.lista) ? cc : VACIA;
+      const conEnlaces = conEnlacesDeCliente(listaClientes);
+      if (conEnlaces) {
+        listaClientes = conEnlaces;
+        localSave("cotizacionesClientes", conEnlaces);
+        if (supabase) sbSaveCotizacionesClientes(conEnlaces);
+      }
+      setClientes(listaClientes);
       setCargando(false);
     })();
   }, []);
@@ -2543,7 +2569,7 @@ function AdminApp() {
 
   const cambiarTab = (t) => {
     // Al abrir las cotizaciones de clientes se traen las que hayan llegado del catálogo.
-    if ((t === "clientes" || t === "directorio") && supabase) sbLoadCotizacionesClientes().then((cc) => { if (cc) setClientes(cc); });
+    if ((t === "clientes" || t === "directorio") && supabase) sbLoadCotizacionesClientes().then((cc) => { if (cc) setClientes(conEnlacesDeCliente(cc) || cc); });
     setTab(t);
     setMenuAbierto(false);
     window.scrollTo({ top: 0 });
