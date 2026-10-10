@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Camera, Image as ImageIcon, Pencil, Trash2, X, Plus, Search, FileText,
   Printer, Share2, Eye, Home, Package, FileText as FileTextIcon, Users, Menu,
-  TrendingUp, DollarSign, Ship, Cloud, CloudOff,
+  TrendingUp, DollarSign, Ship, Cloud, CloudOff, BookOpen,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
@@ -235,7 +235,7 @@ const STYLES = `
   .sidebar.open { transform:translateX(0); }
   .main-content { padding:14px; padding-top:76px; padding-bottom:96px; }
   .mobile-bottom-nav { position:fixed; left:0; right:0; bottom:0; z-index:43; display:grid;
-    grid-template-columns:repeat(4,1fr); background:#fff; border-top:1px solid #CAD4DA;
+    grid-template-columns:repeat(5,1fr); background:#fff; border-top:1px solid #CAD4DA;
     box-shadow:0 -4px 16px rgba(20,34,43,.10); padding:6px 4px max(6px,env(safe-area-inset-bottom)); }
   .mobile-nav-item { min-width:0; padding:7px 2px 5px; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:3px; color:#5B6B75; font-size:10px;
@@ -2117,6 +2117,7 @@ const VACIA = { contador: 0, lista: [] };
 const TABS = [
   { id: "inicio", label: "Inicio", icon: Home },
   { id: "productos", label: "Producto", icon: Package },
+  { id: "catalogo", label: "Catálogo", icon: BookOpen },
   { id: "internas", label: "Cotizaciones internas", icon: FileTextIcon },
   { id: "clientes", label: "Cotizaciones clientes", icon: Users },
 ];
@@ -2296,6 +2297,7 @@ function AdminApp() {
                   <ProductosView productos={productos} guardarProductos={guardarProductos} eliminarProducto={eliminarProducto} avisar={avisar}
                     empresa={empresa} guardarEmpresa={guardarEmpresa} />
                 )}
+                {tab === "catalogo" && <CatalogoPublico productos={productos} />}
                 {tab === "internas" && (
                   <CotizacionInternaView cotiz={internas} guardarCotizaciones={guardarInternas}
                     clientes={clientes} avisar={avisar} empresa={empresa} />

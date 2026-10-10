@@ -121,7 +121,10 @@ const ESTILOS = `
 .cat-incluye { columns:2; column-gap:22px; margin:0; padding:0; list-style:none; font-size:14.5px; }
 .cat-incluye li { break-inside:avoid; padding:5px 0; border-bottom:1px solid #EEF2F4; overflow-wrap:anywhere; }
 .cat-pie-pagina { background:#14222B; color:#9FB0B9; font-size:13px; text-align:center; padding:22px 16px; }
+.cat-dentro { min-height:0; border-radius:14px; overflow:clip; border:1px solid #CAD4DA; }
+.cat-dentro .cat-top h1 { font-size:clamp(32px,5vw,48px); margin-top:18px; }
 
+@media (max-width:860px) { .cat-dentro .cat-filtros { top:60px; } }
 @media (max-width:760px) {
   .cat-wrap { padding:0 14px; }
   .cat-top-in { padding:20px 0 30px; }
@@ -270,14 +273,18 @@ function Ficha({ p, cerrar }) {
   );
 }
 
-export default function CatalogoPublico() {
-  const [productos, setProductos] = useState([]);
-  const [estado, setEstado] = useState("cargando");
+export default function CatalogoPublico({ productos: propios }) {
+  const dentro = Array.isArray(propios);
+  const [descargados, setProductos] = useState([]);
+  const [descarga, setEstado] = useState("cargando");
+  const productos = useMemo(() => (dentro ? propios.map(normalizar) : descargados), [dentro, propios, descargados]);
+  const estado = dentro ? "listo" : descarga;
   const [q, setQ] = useState("");
   const [categoria, setCategoria] = useState("");
   const [abierto, setAbierto] = useState(() => decodeURIComponent(window.location.hash.slice(1)));
 
   useEffect(() => {
+    if (dentro) return;
     const controller = new AbortController();
     (async () => {
       let lista = null;
@@ -291,7 +298,7 @@ export default function CatalogoPublico() {
       setEstado("listo");
     })();
     return () => controller.abort();
-  }, []);
+  }, [dentro]);
 
   useEffect(() => {
     const alCambiar = () => setAbierto(decodeURIComponent(window.location.hash.slice(1)));
@@ -320,7 +327,7 @@ export default function CatalogoPublico() {
   const seleccionado = abierto ? productos.find((p) => p.codigo.toLowerCase() === abierto.toLowerCase()) : null;
 
   return (
-    <div className="cat">
+    <div className={dentro ? "cat cat-dentro" : "cat"}>
       <style>{ESTILOS}</style>
       <header className="cat-top">
         <div className="cat-wrap cat-top-in">
