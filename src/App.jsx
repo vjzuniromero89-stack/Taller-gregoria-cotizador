@@ -1913,6 +1913,7 @@ function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empres
         <div className="paper p-3" style={{ background: "#F3F6F7", borderColor: "#CAD4DA" }}>
           <div className="font-semibold">{cot.totales.contacto.origen === "catalogo" ? "Enviada por el cliente desde el catálogo" : "Datos del cliente"}</div>
           <div className="text-sm mt-1 num">Teléfono: {cot.totales.contacto.telefono || "sin teléfono"}</div>
+          {cot.totales.contacto.direccion && <div className="text-sm mt-1" style={{ overflowWrap: "anywhere" }}>Dirección: {cot.totales.contacto.direccion}</div>}
           {cot.totales.contacto.nota && <div className="text-sm mt-1" style={{ overflowWrap: "anywhere" }}>Nota: {cot.totales.contacto.nota}</div>}
           {numeroWhatsapp(cot.totales.contacto.telefono) && (
             <a className="btn btn-primary mt-2" style={{ textDecoration: "none" }} target="_blank" rel="noopener noreferrer"
@@ -1946,12 +1947,13 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
   const [error, setError] = useState("");
   const [descuento, setDescuento] = useState("0");
   const [telefono, setTelefono] = useState("");
+  const [direccion, setDireccion] = useState("");
   const [editId, setEditId] = useState(null);
   const enEdicion = editId ? cotiz.lista.find((c) => c.id === editId) : null;
 
-  const limpiarFormulario = () => { setEditId(null); setLineas([]); setCliente(""); setTelefono(""); setDescuento("0"); setError(""); };
+  const limpiarFormulario = () => { setEditId(null); setLineas([]); setCliente(""); setTelefono(""); setDireccion(""); setDescuento("0"); setError(""); };
   function editar(c) {
-    setEditId(c.id); setCliente(c.cliente || ""); setTelefono(c.totales?.contacto?.telefono || ""); setDescuento(String(c.descuento || 0));
+    setEditId(c.id); setCliente(c.cliente || ""); setTelefono(c.totales?.contacto?.telefono || ""); setDireccion(c.totales?.contacto?.direccion || ""); setDescuento(String(c.descuento || 0));
     setLineas(c.lineas.map((l) => ({ ...l, cantidad: String(l.cantidad), precioVenta: num(l.precioVenta) > 0 ? String(l.precioVenta) : "" })));
     setDetalle(null); setError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1989,11 +1991,11 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
       ...l, cantidad: num(l.cantidad), precioCbm: num(l.precioCbm), precioVenta: num(l.precioVenta),
     }));
     const ahora = new Date().toISOString();
-    const tel = telefono.trim();
+    const tel = telefono.trim(), dir = direccion.trim();
 
     if (enEdicion) {
       const totales = { ...enEdicion.totales, ...calcTotalesCliente(lineasFinal), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal };
-      if (tel || enEdicion.totales?.contacto) totales.contacto = { origen: "app", ...enEdicion.totales?.contacto, telefono: tel };
+      if (tel || dir || enEdicion.totales?.contacto) totales.contacto = { origen: "app", ...enEdicion.totales?.contacto, telefono: tel, direccion: dir };
       const nueva = { ...enEdicion, cliente: cliente.trim(), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal, lineas: lineasFinal, totales };
       setGuardando(true);
       const guardada = await guardarCotizaciones({ ...cotiz, lista: cotiz.lista.map((c) => (c.id === nueva.id ? nueva : c)) });
@@ -2011,7 +2013,7 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
       lineas: lineasFinal,
       totales: {
         ...calcTotalesCliente(lineasFinal), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal,
-        ...(tel ? { contacto: { telefono: tel, origen: "app" } } : {}),
+        ...(tel || dir ? { contacto: { telefono: tel, direccion: dir, origen: "app" } } : {}),
       },
     };
 
@@ -2080,6 +2082,11 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
                 <input id="cc-telefono" className="inp num" inputMode="tel" placeholder="8888 8888"
                   value={telefono} onChange={(e) => setTelefono(e.target.value)} />
               </div>
+            </div>
+            <div className="mb-3">
+              <label className="lbl" htmlFor="cc-direccion">Ciudad o dirección de entrega (opcional)</label>
+              <input id="cc-direccion" className="inp" placeholder="Managua, barrio o dirección"
+                value={direccion} onChange={(e) => setDireccion(e.target.value)} />
             </div>
 
             {lineas.length === 0 && <SelectorProducto productos={productos} onAgregar={agregar} />}

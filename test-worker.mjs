@@ -50,12 +50,12 @@ globalThis.fetch=async(url,init={})=>{const u=new URL(url);
   if(init.method==='POST'){guardado=JSON.parse(init.body);return new Response(null,{status:201});}
   return Response.json([{numero:'WEB-0004'}]);};
 const pedir=(body)=>worker.fetch(new Request('https://example.test/api/solicitudes',{method:'POST',body:JSON.stringify(body)}),env);
-r=await pedir({nombre:'Ana',telefono:'8888 7777',nota:'Managua',lineas:[{codigo:'A-1',cantidad:2,precio:1},{codigo:'NO',cantidad:1}]});
+r=await pedir({nombre:'Ana',telefono:'8888 7777',direccion:'León, centro',nota:'Managua',lineas:[{codigo:'A-1',cantidad:2,precio:1},{codigo:'NO',cantidad:1}]});
 assert.equal(r.status,201);const sol=(await r.json()).cotizacion;
 assert.equal(sol.numero,'WEB-0005');assert.equal(sol.total,4000);assert.equal(sol.lineas.length,1);assert.equal(sol.lineas[0].precio,2000);
 assert.equal(JSON.stringify(sol).includes('precioProducto'),false);assert.equal(JSON.stringify(sol).includes('precioCbm'),false);
 assert.equal(guardado.cliente,'Ana');assert.equal(guardado.total_final,4000);assert.equal(guardado.lineas[0].precioProducto,1000);
-assert.equal(guardado.totales.totalFlete,1100);assert.equal(guardado.totales.ganancia,900);assert.deepEqual(guardado.totales.contacto,{telefono:'8888 7777',nota:'Managua',origen:'catalogo'});
+assert.equal(guardado.totales.totalFlete,1100);assert.equal(guardado.totales.ganancia,900);assert.deepEqual(guardado.totales.contacto,{telefono:'8888 7777',direccion:'León, centro',nota:'Managua',origen:'catalogo'});assert.equal(sol.direccion,'León, centro');
 for(const malo of [{nombre:'',telefono:'88887777',lineas:[{codigo:'A-1',cantidad:1}]},{nombre:'Ana',telefono:'123',lineas:[{codigo:'A-1',cantidad:1}]},{nombre:'Ana',telefono:'88887777',lineas:[]}]){r=await pedir(malo);assert.equal(r.status,400);}
 globalThis.fetch=async()=>Response.json([{id:guardado.id,numero:'CLI-0001',lineas:[],totales:{}}]);
 r=await worker.fetch(req('/api/solicitudes/'+guardado.id),env);assert.equal(r.status,404);

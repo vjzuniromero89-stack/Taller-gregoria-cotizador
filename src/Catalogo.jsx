@@ -657,6 +657,7 @@ const enlaceWhatsapp = (cot, whatsapp) => `https://wa.me/${whatsapp}?text=${enco
   `*Cotización ${cot.numero}*`,
   `Cliente: ${cot.cliente}`,
   `Teléfono: ${cot.telefono}`,
+  ...(cot.direccion ? [`Dirección: ${cot.direccion}`] : []),
   ...(cot.total > 0 ? [`Total: ${dinero(cot.total)}`] : []),
   `Entrega aproximada: ${DIAS_PRODUCCION + DIAS_ENVIO} días`,
   ...(cot.nota ? [`Nota: ${cot.nota}`] : []),
@@ -693,7 +694,7 @@ function CotizacionLista({ cot, empresa, alTerminar }) {
 }
 
 function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
-  const [datos, setDatos] = useState(() => leerGuardado(`${CLAVE_PEDIDO}-datos`, { nombre: "", telefono: "" }));
+  const [datos, setDatos] = useState(() => ({ nombre: "", telefono: "", direccion: "", ...leerGuardado(`${CLAVE_PEDIDO}-datos`, {}) }));
   const [nota, setNota] = useState("");
   const [error, setError] = useState("");
   const [trabajando, setTrabajando] = useState(false);
@@ -713,15 +714,15 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
   const crear = async (e) => {
     e.preventDefault();
     if (trabajando) return;
-    const nombre = datos.nombre.trim(), telefono = datos.telefono.trim();
+    const nombre = datos.nombre.trim(), telefono = datos.telefono.trim(), direccion = datos.direccion.trim();
     if (!nombre) { setError("Escribe tu nombre."); return; }
     if (telefono.replace(/\D/g, "").length < 8) { setError("Escribe tu número de teléfono completo."); return; }
     setError(""); setTrabajando(true);
-    guardarLocal(`${CLAVE_PEDIDO}-datos`, { nombre, telefono });
+    guardarLocal(`${CLAVE_PEDIDO}-datos`, { nombre, telefono, direccion });
     try {
       const res = await fetch("/api/solicitudes", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ nombre, telefono, nota: nota.trim(), lineas: lineas.map((l) => ({ codigo: l.codigo, cantidad: l.cantidad })) }),
+        body: JSON.stringify({ nombre, telefono, direccion, nota: nota.trim(), lineas: lineas.map((l) => ({ codigo: l.codigo, cantidad: l.cantidad })) }),
       });
       const r = await res.json().catch(() => ({}));
       if (!res.ok || !r.cotizacion) throw new Error(r.error || "sin respuesta");
@@ -772,8 +773,11 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
                 <label>Tu teléfono o WhatsApp
                   <input value={datos.telefono} onChange={set("telefono")} inputMode="tel" autoComplete="tel" placeholder="8888 8888" maxLength={30} />
                 </label>
+                <label className="ancho">Ciudad o dirección de entrega (opcional)
+                  <input value={datos.direccion} onChange={set("direccion")} autoComplete="street-address" maxLength={160} placeholder="Managua, barrio o dirección" />
+                </label>
                 <label className="ancho">Nota (opcional)
-                  <textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)} maxLength={300} placeholder="Ciudad, fecha en que lo necesitas, preguntas" />
+                  <textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)} maxLength={300} placeholder="Fecha en que lo necesitas, preguntas" />
                 </label>
               </div>
               {error && <p className="cat-error" role="alert">{error}</p>}

@@ -43,7 +43,7 @@ function cotizacionPublica(fila) {
   const contacto = fila.totales?.contacto || {};
   return {
     id: fila.id, numero: fila.numero, fecha: fila.fecha, cliente: fila.cliente || "",
-    telefono: contacto.telefono || "", nota: contacto.nota || "", total: Number(fila.total_final) || 0,
+    telefono: contacto.telefono || "", direccion: contacto.direccion || "", nota: contacto.nota || "", total: Number(fila.total_final) || 0,
     lineas: (Array.isArray(fila.lineas) ? fila.lineas : []).map((l) => ({
       codigo: l.codigo, nombre: l.nombre, cantidad: Number(l.cantidad) || 0, precio: Number(l.precioVenta) || 0, foto: l.foto || "",
     })),
@@ -92,6 +92,7 @@ export default {
       let cuerpo;
       try { cuerpo = await request.json(); } catch { return json({ ok: false, error: "JSON inválido" }, 400); }
       const nombre = texto(cuerpo?.nombre, 80), telefono = texto(cuerpo?.telefono, 30), nota = texto(cuerpo?.nota, 300);
+      const direccion = texto(cuerpo?.direccion, 160);
       const pedidas = new Map();
       for (const l of Array.isArray(cuerpo?.lineas) ? cuerpo.lineas.slice(0, 40) : []) {
         const codigo = texto(l?.codigo, 60).replace(/["\\]/g, ""), cantidad = Math.floor(Number(l?.cantidad));
@@ -130,7 +131,7 @@ export default {
       const fila = {
         id: crypto.randomUUID(), numero: `WEB-${String(siguiente).padStart(4, "0")}`, fecha: new Date().toISOString(), cliente: nombre,
         descuento: 0, descuento_monto: 0, total_final: t.totalVenta, lineas,
-        totales: { ...t, contacto: { telefono, nota, origen: "catalogo" } },
+        totales: { ...t, contacto: { telefono, direccion, nota, origen: "catalogo" } },
       };
       const guardada = await sbRequest(env, "cotizaciones_clientes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(fila) });
       if (!guardada.ok) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);

@@ -29,7 +29,7 @@ const apiDePrueba = {
         }).filter(Boolean);
         ultima = {
           id: "00000000-0000-4000-8000-000000000001", numero: "WEB-0001", fecha: new Date().toISOString(),
-          cliente: pedido.nombre, telefono: pedido.telefono, nota: pedido.nota || "", lineas,
+          cliente: pedido.nombre, telefono: pedido.telefono, direccion: pedido.direccion || "", nota: pedido.nota || "", lineas,
           total: lineas.reduce((s, l) => s + l.precio * l.cantidad, 0),
         };
         responder(res, { ok: true, cotizacion: ultima }, 201);
