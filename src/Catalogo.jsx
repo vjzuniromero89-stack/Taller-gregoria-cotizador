@@ -219,6 +219,43 @@ const ESTILOS = `
 .cat-enviar:hover { background:#0E6F3B; }
 .cat-nota-envio { font-size:13px; color:#5B6B75; text-align:right; margin:8px 0 0; }
 .cat-panel-ancho { max-width:860px; }
+.cat-seguir { margin-top:14px; background:#E4EFF1; border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:3px; font-size:14.5px; color:#134650; }
+.cat-seguir a { color:#134650; font-weight:600; overflow-wrap:anywhere; }
+.cat-seguimiento { background:#fff; border:1px solid #D5DEE3; border-radius:16px; padding:18px; }
+.cat-seg-arriba { display:flex; flex-wrap:wrap; justify-content:space-between; gap:14px 24px; }
+.cat-seg-arriba small { display:block; font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#5B6B75; }
+.cat-seg-arriba b { display:block; font-family:'Barlow Condensed',sans-serif; font-size:34px; line-height:1.05; color:#14222B; }
+.cat-seg-arriba p { margin:4px 0 0; color:#4A5B66; font-size:15.5px; }
+.cat-seg-entrega { background:#FFF4CC; box-shadow:inset 0 0 0 2px #F2B705; border-radius:12px; padding:10px 14px; }
+.cat-seg-entrega b { font-size:26px; color:#5F4600; }
+.cat-seg-entrega span { font-size:13px; color:#7A5900; }
+.cat-pasos { list-style:none; margin:18px 0 0; padding:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); }
+.cat-pasos li { position:relative; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; font-size:13px; font-weight:600; color:#8A99A3; }
+.cat-pasos li::before { content:""; position:absolute; top:15px; right:50%; width:100%; height:4px; background:#DCE4E8; }
+.cat-pasos li:first-child::before { display:none; }
+.cat-pasos li.hecho::before, .cat-pasos li.actual::before { background:#1B5E6B; }
+.cat-paso-punto { position:relative; z-index:1; width:34px; height:34px; border-radius:50%; background:#DCE4E8; color:#5B6B75; display:flex; align-items:center; justify-content:center; font-weight:700; }
+.cat-pasos li.hecho .cat-paso-punto { background:#1B5E6B; color:#fff; }
+.cat-pasos li.actual .cat-paso-punto { background:#F2B705; color:#14222B; box-shadow:0 0 0 5px rgba(242,183,5,.28); }
+.cat-pasos li.hecho, .cat-pasos li.actual { color:#14222B; }
+.cat-paso-nombre { overflow-wrap:anywhere; line-height:1.2; }
+.cat-seg-nota { margin:14px 0 0; font-size:13px; color:#5B6B75; }
+.cat-estado { display:inline-flex; border-radius:999px; padding:2px 11px; font-size:13px; font-weight:700; background:#FFF4CC; color:#7A5A00; }
+.cat-estado-confirmada, .cat-estado-entregada { background:#DDF3E6; color:#14603A; }
+.cat-estado-produccion, .cat-estado-camino { background:#E4EFF1; color:#134650; }
+.cat-estado-cancelada { background:#EEF1F3; color:#5B6B75; }
+.cat-mis { display:grid; gap:12px; }
+.cat-mi { display:flex; flex-direction:column; gap:4px; background:#fff; border:1px solid #D5DEE3; border-radius:14px; padding:14px 16px; text-decoration:none; color:inherit; }
+.cat-mi:hover { border-color:#9FB9C0; box-shadow:0 8px 22px rgba(20,34,43,.1); }
+.cat-mi:focus-visible { outline:3px solid #F2B705; outline-offset:2px; }
+.cat-mi-arriba { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.cat-mi-arriba b { font-size:28px; line-height:1; }
+.cat-mi-fecha { font-size:13.5px; color:#5B6B75; }
+.cat-mi-equipos { font-size:14.5px; color:#314551; overflow-wrap:anywhere; }
+.cat-mi-abajo { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 22px; margin-top:6px; }
+.cat-mi-abajo small { display:block; font-size:11.5px; font-weight:600; color:#5B6B75; text-transform:uppercase; letter-spacing:.04em; }
+.cat-mi-abajo b { font-size:17px; }
+@media (max-width:560px) { .cat-pasos li { font-size:11px; } .cat-paso-punto { width:28px; height:28px; } .cat-pasos li::before { top:12px; } .cat-seg-arriba b { font-size:28px; } }
 .cat-tiempos { background:#E4EFF1; border-radius:8px; padding:10px 12px; font-size:14.5px; color:#134650; margin:12px 0 0; line-height:1.4; }
 .cat-guardada { display:flex; align-items:center; gap:8px; color:#1D7A46; font-weight:600; font-size:16px; margin:0 0 12px; }
 .cat-hoja-img { display:block; width:100%; height:auto; border:1px solid #D5DEE3; border-radius:10px; box-shadow:0 6px 22px rgba(20,34,43,.12); background:#fff; }
@@ -662,7 +699,7 @@ const enlaceWhatsapp = (cot, whatsapp) => `https://wa.me/${whatsapp}?text=${enco
   `Entrega aproximada: ${DIAS_PRODUCCION + DIAS_ENVIO} días`,
   ...(cot.nota ? [`Nota: ${cot.nota}`] : []),
   "",
-  "Ver la cotización:",
+  "Ver la cotización y seguir el pedido:",
   enlaceCotizacion(cot),
 ].join("\n"))}`;
 
@@ -688,6 +725,13 @@ function CotizacionLista({ cot, empresa, alTerminar }) {
         )}
       </div>
       {empresa.whatsapp && <p className="cat-nota-envio">Se abrirá WhatsApp con el chat del taller. Solo tienes que tocar “Enviar”.</p>}
+      {alTerminar && (
+        <div className="cat-seguir">
+          <b>Sigue tu pedido aquí</b>
+          <span>En este enlace verás cuando tu cotización esté confirmada, en producción, en camino y entregada.</span>
+          <a href={enlaceCotizacion(cot)}>{enlaceCotizacion(cot)}</a>
+        </div>
+      )}
       {alTerminar && <div className="cat-panel-botones"><button type="button" className="cat-btn claro" onClick={alTerminar}>Listo</button></div>}
     </div>
   );
@@ -799,21 +843,94 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
   );
 }
 
-/** Página pública de una cotización ya enviada: /cotizacion/<id>. */
-export function VistaCotizacion({ id }) {
-  const empresa = useEmpresaPublica(true);
-  const [cot, setCot] = useState(null);
+/* ---------- seguimiento del pedido: lo que ve el cliente en su enlace ---------- */
+const PASOS = [["pendiente", "Recibida"], ["confirmada", "Confirmada"], ["produccion", "En producción"], ["camino", "En camino"], ["entregada", "Entregada"]];
+const TEXTO_ESTADO = {
+  pendiente: ["Pendiente de confirmar", "Recibimos tu cotización. Aquí verás cuando esté confirmada."],
+  confirmada: ["Confirmada", "Tu pedido está confirmado."],
+  produccion: ["En producción", "Tu pedido se está fabricando."],
+  camino: ["En camino", "Tu pedido ya va en camino."],
+  entregada: ["Entregada", "Tu pedido fue entregado. Gracias por tu compra."],
+  cancelada: ["Cancelada", "Esta cotización fue cancelada."],
+};
+const estadoPublico = (cot) => (TEXTO_ESTADO[cot.estado] ? cot.estado : "pendiente");
+const fechaCorta = (d) => new Date(d).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" });
+const entregaDe = (cot) => (cot.confirmadaEl ? new Date(new Date(cot.confirmadaEl).getTime() + (DIAS_PRODUCCION + DIAS_ENVIO) * 86400000) : null);
+
+/** Pide una dirección y la vuelve a pedir cada cierto tiempo, para que el cliente vea los cambios sin recargar. */
+function useDatosVivos(url, cadaMs = 20000) {
+  const [datos, setDatos] = useState(null);
   const [estado, setEstado] = useState("cargando");
   useEffect(() => {
-    let vivo = true;
-    fetch(`/api/solicitudes/${encodeURIComponent(id)}`, { cache: "no-store" }).then(async (r) => {
-      const d = await r.json().catch(() => ({}));
-      if (!vivo) return;
-      if (r.ok && d.cotizacion) { setCot(d.cotizacion); setEstado("lista"); } else setEstado(r.status === 404 ? "no-existe" : "error");
-    }).catch(() => { if (vivo) setEstado("error"); });
-    return () => { vivo = false; };
-  }, [id]);
-  const sinWhatsapp = useMemo(() => ({ ...empresa, whatsapp: "" }), [empresa]);
+    let vivo = true, previo = "";
+    const cargar = async () => {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        const texto = await r.text();
+        if (!vivo) return;
+        if (!r.ok) { if (!previo) setEstado(r.status === 404 ? "no-existe" : "error"); return; }
+        if (texto !== previo) { previo = texto; setDatos(JSON.parse(texto)); }
+        setEstado("lista");
+      } catch { if (vivo && !previo) setEstado("error"); }
+    };
+    cargar();
+    const reloj = setInterval(() => { if (!document.hidden) cargar(); }, cadaMs);
+    const alVolver = () => { if (!document.hidden) cargar(); };
+    document.addEventListener("visibilitychange", alVolver);
+    return () => { vivo = false; clearInterval(reloj); document.removeEventListener("visibilitychange", alVolver); };
+  }, [url, cadaMs]);
+  return [datos, estado];
+}
+
+function EtiquetaEstado({ cot }) {
+  const e = estadoPublico(cot);
+  return <span className={`cat-estado cat-estado-${e}`}>{TEXTO_ESTADO[e][0]}</span>;
+}
+
+function Seguimiento({ cot }) {
+  const estado = estadoPublico(cot);
+  const paso = PASOS.findIndex((p) => p[0] === estado);
+  const entrega = entregaDe(cot);
+  const saldo = Math.max(0, cot.total - cot.pagado);
+  return (
+    <section className="cat-seguimiento" aria-label="Estado de tu pedido">
+      <div className="cat-seg-arriba">
+        <div>
+          <small>Estado de tu pedido</small>
+          <b>{TEXTO_ESTADO[estado][0]}</b>
+          <p>{TEXTO_ESTADO[estado][1]}</p>
+        </div>
+        {estado !== "cancelada" && estado !== "entregada" && (
+          <div className="cat-seg-entrega">
+            <small>Entrega estimada</small>
+            <b className="cat-num">{entrega ? fechaCorta(entrega) : `${DIAS_PRODUCCION + DIAS_ENVIO} días`}</b>
+            <span>{entrega ? `${DIAS_PRODUCCION} días de producción + ${DIAS_ENVIO} de envío` : "a partir de la confirmación"}</span>
+          </div>
+        )}
+      </div>
+      {estado !== "cancelada" && (
+        <ol className="cat-pasos">
+          {PASOS.map(([clave, nombre], i) => (
+            <li key={clave} className={i < paso ? "hecho" : i === paso ? "actual" : ""} aria-current={i === paso ? "step" : undefined}>
+              <span className="cat-paso-punto">{i < paso || (i === paso && estado === "entregada") ? <Check size={15} /> : i + 1}</span>
+              <span className="cat-paso-nombre">{nombre}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {cot.pagado > 0 && (
+        <div className="cat-datos" style={{ marginTop: 14 }}>
+          <div className="cat-dato"><small>Total</small><b className="cat-num">{dinero(cot.total)}</b></div>
+          <div className="cat-dato"><small>Pagado</small><b className="cat-num">{dinero(cot.pagado)}</b></div>
+          <div className="cat-dato cobro"><small>Saldo</small><b className="cat-num">{dinero(saldo)}</b></div>
+        </div>
+      )}
+      <p className="cat-seg-nota">Esta página se actualiza sola. Guarda el enlace para revisar tu pedido cuando quieras.</p>
+    </section>
+  );
+}
+
+function PaginaCliente({ empresa, titulo, children }) {
   return (
     <div className="cat">
       <style>{ESTILOS}</style>
@@ -823,17 +940,78 @@ export function VistaCotizacion({ id }) {
             <img src={empresa.logo} alt="" />
             <div><b>{empresa.nombre}</b><span>{empresa.contacto.split("\n")[0]}</span></div>
           </div>
-          <h1>{cot ? <>Cotización <em>{cot.numero}</em></> : "Cotización"}</h1>
+          <h1>{titulo}</h1>
         </div>
       </header>
-      <main className="cat-wrap" style={{ paddingTop: 22, paddingBottom: 48, maxWidth: 980 }}>
-        {estado === "cargando" ? <p className="cat-cuenta" role="status">Cargando la cotización…</p> :
-          estado === "no-existe" ? <div className="cat-vacio">Esta cotización ya no existe.</div> :
-            estado === "error" ? <div className="cat-vacio">No pudimos cargar la cotización. Inténtalo de nuevo en un momento.</div> :
-              <div className="cat-vista"><CotizacionLista cot={cot} empresa={sinWhatsapp} /></div>}
-        <p style={{ marginTop: 18 }}><a className="cat-btn claro" href="/catalogo" style={{ textDecoration: "none" }}>Ver el catálogo</a></p>
-      </main>
+      <main className="cat-wrap" style={{ paddingTop: 22, paddingBottom: 48, maxWidth: 980 }}>{children}</main>
     </div>
+  );
+}
+
+const AVISOS = {
+  cargando: "Cargando…",
+  "no-existe": "Este enlace ya no existe.",
+  error: "No pudimos cargar la información. Inténtalo de nuevo en un momento.",
+};
+
+/** Página pública de una cotización: /cotizacion/<id>. Muestra el estado del pedido y la hoja. */
+export function VistaCotizacion({ id }) {
+  const empresa = useEmpresaPublica(true);
+  const [datos, estado] = useDatosVivos(`/api/solicitudes/${encodeURIComponent(id)}`);
+  const cot = datos?.cotizacion || null;
+  const sinWhatsapp = useMemo(() => ({ ...empresa, whatsapp: "" }), [empresa]);
+  // La hoja solo se vuelve a dibujar si cambian los equipos o el total, no con cada cambio de estado.
+  const huella = cot ? JSON.stringify([cot.lineas, cot.total, cot.cliente, cot.telefono]) : "";
+  const paraHoja = useMemo(() => cot, [huella]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <PaginaCliente empresa={empresa} titulo={cot ? <>Cotización <em>{cot.numero}</em></> : "Cotización"}>
+      {!cot ? <div className="cat-vacio" role="status">{AVISOS[estado] || AVISOS.cargando}</div> : <>
+        <Seguimiento cot={cot} />
+        <div className="cat-vista" style={{ marginTop: 16 }}><CotizacionLista cot={paraHoja} empresa={sinWhatsapp} /></div>
+      </>}
+      <p style={{ marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {cot?.token && <a className="cat-btn" href={`/cliente/${cot.token}`}>Ver todas mis cotizaciones</a>}
+        <a className="cat-btn claro" href="/catalogo">Ver el catálogo</a>
+      </p>
+    </PaginaCliente>
+  );
+}
+
+/** Página pública de un cliente: /cliente/<token>. Todas sus cotizaciones y el estado de cada una. */
+export function VistaCliente({ token }) {
+  const empresa = useEmpresaPublica(true);
+  const [datos, estado] = useDatosVivos(`/api/cliente/${encodeURIComponent(token)}`);
+  const lista = datos?.cotizaciones || [];
+  return (
+    <PaginaCliente empresa={empresa} titulo={datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : "Mis cotizaciones"}>
+      {!datos ? <div className="cat-vacio" role="status">{AVISOS[estado] || AVISOS.cargando}</div> : <>
+        <p className="cat-cuenta" style={{ marginTop: 0 }}>
+          {lista.length === 1 ? "Tienes 1 cotización." : `Tienes ${lista.length} cotizaciones.`} Esta página se actualiza sola.
+        </p>
+        <div className="cat-mis">
+          {lista.map((cot) => {
+            const entrega = entregaDe(cot), e = estadoPublico(cot);
+            return (
+              <a key={cot.id} className="cat-mi" href={`/cotizacion/${cot.id}`}>
+                <div className="cat-mi-arriba">
+                  <b className="cat-cond cat-num">{cot.numero}</b>
+                  <EtiquetaEstado cot={cot} />
+                </div>
+                <span className="cat-mi-fecha">{fechaCorta(cot.fecha)} · {cot.lineas.reduce((s, l) => s + l.cantidad, 0)} equipos</span>
+                <span className="cat-mi-equipos">{cot.lineas.map((l) => `${l.cantidad} × ${l.codigo}`).join(", ")}</span>
+                <div className="cat-mi-abajo">
+                  <span><small>Total</small><b className="cat-num">{cot.total > 0 ? dinero(cot.total) : "Por consultar"}</b></span>
+                  {cot.pagado > 0 && <span><small>Saldo</small><b className="cat-num">{dinero(Math.max(0, cot.total - cot.pagado))}</b></span>}
+                  {entrega && e !== "entregada" && e !== "cancelada" && <span><small>Entrega estimada</small><b className="cat-num">{fechaCorta(entrega)}</b></span>}
+                  <span className="cat-ver" style={{ display: "inline-flex", marginLeft: "auto" }}>Ver pedido<ChevronRight size={15} /></span>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </>}
+      <p style={{ marginTop: 18 }}><a className="cat-btn claro" href="/catalogo">Ver el catálogo</a></p>
+    </PaginaCliente>
   );
 }
 

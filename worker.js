@@ -44,6 +44,9 @@ function cotizacionPublica(fila) {
   return {
     id: fila.id, numero: fila.numero, fecha: fila.fecha, cliente: fila.cliente || "",
     telefono: contacto.telefono || "", direccion: contacto.direccion || "", nota: contacto.nota || "", total: Number(fila.total_final) || 0,
+    token: contacto.token || "", estado: fila.totales?.estado || "pendiente",
+    confirmadaEl: fila.totales?.confirmadaEl || null, entregadaEl: fila.totales?.entregadaEl || null,
+    pagado: (Array.isArray(fila.totales?.pagos) ? fila.totales.pagos : []).reduce((s, p) => s + (Number(p.monto) || 0), 0),
     lineas: (Array.isArray(fila.lineas) ? fila.lineas : []).map((l) => ({
       codigo: l.codigo, nombre: l.nombre, cantidad: Number(l.cantidad) || 0, precio: Number(l.precioVenta) || 0, foto: l.foto || "",
     })),
@@ -115,6 +118,12 @@ export default {
       }
       if (!lineas.length) return json({ ok: false, error: "Esos equipos ya no están en el catálogo." }, 400);
 
+      // El mismo teléfono conserva el mismo enlace de cliente (/cliente/<token>).
+      const tel = telefono.replace(/\D/g, "");
+      const previa = await sbRequest(env, `cotizaciones_clientes?select=totales&totales-%3Econtacto-%3E%3Etel=eq.${tel}&order=fecha.desc&limit=1`);
+      const tokenPrevio = previa.ok && Array.isArray(previa.data) ? previa.data[0]?.totales?.contacto?.token : "";
+      const token = /^[0-9a-f]{32}$/.test(tokenPrevio || "") ? tokenPrevio : crypto.randomUUID().replace(/-/g, "");
+
       const ultima = await sbRequest(env, "cotizaciones_clientes?select=numero&numero=like.WEB-*&order=numero.desc&limit=1");
       if (!ultima.ok) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
       const siguiente = (parseInt(String(ultima.data?.[0]?.numero || "").split("-")[1], 10) || 0) + 1;
@@ -131,7 +140,7 @@ export default {
       const fila = {
         id: crypto.randomUUID(), numero: `WEB-${String(siguiente).padStart(4, "0")}`, fecha: new Date().toISOString(), cliente: nombre,
         descuento: 0, descuento_monto: 0, total_final: t.totalVenta, lineas,
-        totales: { ...t, contacto: { telefono, direccion, nota, origen: "catalogo" } },
+        totales: { ...t, contacto: { telefono, tel, token, direccion, nota, origen: "catalogo" } },
       };
       const guardada = await sbRequest(env, "cotizaciones_clientes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(fila) });
       if (!guardada.ok) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
@@ -139,13 +148,22 @@ export default {
     }
 
     // Una cotización enviada desde el catálogo, sin costos, para verla con su enlace.
-    const idSolicitud = request.method === "GET" && url.pathname.match(/^\/api\/solicitudes\/([0-9a-f-]{36})$/)?.[1];
+    const idSolicitud = request.method === "GET" && url.pathname.match(/^\/api\/solicitudes\/([A-Za-z0-9-]{8,40})$/)?.[1];
     if (idSolicitud) {
       const r = await sbRequest(env, `cotizaciones_clientes?id=eq.${idSolicitud}&select=id,numero,fecha,cliente,total_final,lineas,totales&limit=1`);
       if (!r.ok) return json({ ok: false, error: "No se pudo cargar la cotización." }, 503);
       const fila = Array.isArray(r.data) ? r.data[0] : null;
-      if (!fila || fila.totales?.contacto?.origen !== "catalogo") return json({ ok: false, error: "No existe." }, 404);
+      if (!fila) return json({ ok: false, error: "No existe." }, 404);
       return json({ ok: true, cotizacion: cotizacionPublica(fila) });
+    }
+
+    // Todas las cotizaciones de un cliente, con su estado, para su enlace propio.
+    const tokenCliente = request.method === "GET" && url.pathname.match(/^\/api\/cliente\/([0-9a-f]{32})$/)?.[1];
+    if (tokenCliente) {
+      const r = await sbRequest(env, `cotizaciones_clientes?select=id,numero,fecha,cliente,total_final,lineas,totales&totales-%3Econtacto-%3E%3Etoken=eq.${tokenCliente}&order=fecha.desc&limit=100`);
+      if (!r.ok || !Array.isArray(r.data)) return json({ ok: false, error: "No se pudo cargar." }, 503);
+      if (!r.data.length) return json({ ok: false, error: "No existe." }, 404);
+      return json({ ok: true, nombre: r.data[0].cliente || "", cotizaciones: r.data.map(cotizacionPublica) });
     }
 
     // Catálogo para clientes: solo precio de venta, nunca costos. Catálogo interno: costos, flete y CBM.

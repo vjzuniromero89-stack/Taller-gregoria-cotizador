@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Camera, Image as ImageIcon, Pencil, Trash2, X, Plus, Search, FileText,
   Printer, Share2, Eye, Home, Package, FileText as FileTextIcon, Users, Menu,
-  TrendingUp, DollarSign, Ship, Cloud, CloudOff, BookOpen, Tag,
+  TrendingUp, DollarSign, Ship, Cloud, CloudOff, BookOpen, Tag, Contact,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
 import { KG_POR_CBM, fecha, PIE_TEXTO, hojaImagen, TIEMPOS_ENTREGA, DIAS_PRODUCCION, DIAS_ENVIO } from "./hoja.js";
-import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, VistaCotizacion, precioConGanancia, numeroWhatsapp } from "./Catalogo.jsx";
+import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, VistaCotizacion, VistaCliente, precioConGanancia, numeroWhatsapp } from "./Catalogo.jsx";
 import { FICHA_VACIA, armarDescripcion, leerDescripcion, cbmDeMedidas } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
@@ -263,9 +263,9 @@ const STYLES = `
   .sidebar.open { transform:translateX(0); }
   .main-content { padding:14px; padding-top:76px; padding-bottom:96px; }
   .mobile-bottom-nav { position:fixed; left:0; right:0; bottom:0; z-index:43; display:grid;
-    grid-template-columns:repeat(6,1fr); background:#fff; border-top:1px solid #CAD4DA;
+    grid-template-columns:repeat(7,1fr); background:#fff; border-top:1px solid #CAD4DA;
     box-shadow:0 -4px 16px rgba(20,34,43,.10); padding:6px 4px max(6px,env(safe-area-inset-bottom)); }
-  .mobile-nav-item { min-width:0; padding:7px 2px 5px; display:flex; flex-direction:column;
+  .mobile-nav-item { min-width:0; padding:7px 1px 5px; overflow-wrap:anywhere; text-align:center; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:3px; color:#5B6B75; font-size:10px;
     line-height:1.05; font-weight:600; border-radius:8px; }
   .mobile-nav-item[aria-selected="true"] { color:#1B5E6B; background:#E4EFF1; }
@@ -1740,6 +1740,12 @@ function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empres
   const pagado = pagadoDe(cot);
   const entrega = entregaEstimada(cot);
   const telefonoCliente = cot.totales?.contacto?.telefono || "";
+  const enlaceSeguimiento = `${window.location.origin}/cotizacion/${cot.id}`;
+  const enlaceCliente = cot.totales?.contacto?.token ? `${window.location.origin}/cliente/${cot.totales.contacto.token}` : "";
+  const copiar = async (texto) => {
+    try { await navigator.clipboard.writeText(texto); avisar("Enlace copiado"); }
+    catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
+  };
 
   const ponerEstado = async (nuevo) => {
     if (nuevo === estado) return;
@@ -1824,7 +1830,7 @@ function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empres
       lineas.push(`Tiempo de producción: ${DIAS_PRODUCCION} días`, `Tiempo de envío: ${DIAS_ENVIO} días`);
       if (entrega) lineas.push(`Entrega estimada: ${soloFecha(entrega)}`);
     }
-    if (cot.totales?.contacto?.origen === "catalogo") lineas.push("", "Su cotización:", `${window.location.origin}/cotizacion/${cot.id}`);
+    lineas.push("", "Siga su pedido en este enlace:", enlaceSeguimiento);
     return lineas.join("\n");
   };
 
@@ -1858,6 +1864,19 @@ function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empres
             {ESTADOS.map(([valor, nombre]) => <option key={valor} value={valor}>{nombre}</option>)}
           </select>
         </div>
+      </div>
+
+      <div className="pagos-caja">
+        <div className="font-semibold">Enlace de seguimiento para el cliente</div>
+        <p className="text-sm muted mt-1">El cliente ve aquí el estado de su pedido. Se actualiza solo cada vez que cambias el estado o registras un pago.</p>
+        <div className="flex gap-2 mt-2" style={{ flexWrap: "wrap" }}>
+          <input className="inp" style={{ flex: "1 1 240px" }} readOnly value={enlaceSeguimiento} aria-label="Enlace de seguimiento" onFocus={(e) => e.target.select()} />
+          <button className="btn btn-primary" onClick={() => copiar(enlaceSeguimiento)}>Copiar</button>
+          <a className="btn btn-ghost" style={{ textDecoration: "none" }} href={enlaceSeguimiento} target="_blank" rel="noopener noreferrer">Abrir</a>
+        </div>
+        {enlaceCliente && (
+          <button className="btn btn-ghost mt-2" onClick={() => copiar(enlaceCliente)}>Copiar enlace con todas las cotizaciones de este cliente</button>
+        )}
       </div>
 
       {estado === "pendiente" && onEditar && (
@@ -1992,10 +2011,18 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     }));
     const ahora = new Date().toISOString();
     const tel = telefono.trim(), dir = direccion.trim();
+    // Datos del cliente y su enlace propio: el mismo teléfono conserva el mismo enlace.
+    const contactoPara = (previo) => {
+      const digitos = tel.replace(/\D/g, "");
+      const mismo = digitos && cotiz.lista.find((c) => c.totales?.contacto?.tel === digitos && c.totales.contacto.token);
+      const token = mismo ? mismo.totales.contacto.token
+        : (previo?.token && (previo.tel || "") === digitos ? previo.token : crypto.randomUUID().replace(/-/g, ""));
+      return { origen: "app", ...previo, telefono: tel, tel: digitos, direccion: dir, token };
+    };
 
     if (enEdicion) {
       const totales = { ...enEdicion.totales, ...calcTotalesCliente(lineasFinal), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal };
-      if (tel || dir || enEdicion.totales?.contacto) totales.contacto = { origen: "app", ...enEdicion.totales?.contacto, telefono: tel, direccion: dir };
+      totales.contacto = contactoPara(enEdicion.totales?.contacto);
       const nueva = { ...enEdicion, cliente: cliente.trim(), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal, lineas: lineasFinal, totales };
       setGuardando(true);
       const guardada = await guardarCotizaciones({ ...cotiz, lista: cotiz.lista.map((c) => (c.id === nueva.id ? nueva : c)) });
@@ -2013,7 +2040,7 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
       lineas: lineasFinal,
       totales: {
         ...calcTotalesCliente(lineasFinal), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal,
-        ...(tel || dir ? { contacto: { telefono: tel, direccion: dir, origen: "app" } } : {}),
+        contacto: contactoPara(),
       },
     };
 
@@ -2156,6 +2183,115 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
   );
 }
 
+/** Clientes: se arma solo a partir de las cotizaciones (mismo teléfono = mismo cliente). */
+function ClientesView({ clientes, avisar, irA }) {
+  const [q, setQ] = useState("");
+  const [abierto, setAbierto] = useState(null);
+  const lista = useMemo(() => {
+    const grupos = new Map();
+    for (const c of [...clientes.lista].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))) {
+      const contacto = c.totales?.contacto || {};
+      const clave = contacto.tel || contacto.token || `nombre:${(c.cliente || "Sin nombre").trim().toLowerCase()}`;
+      if (!grupos.has(clave)) {
+        grupos.set(clave, { clave, nombre: c.cliente || "Sin nombre", telefono: contacto.telefono || "", direccion: contacto.direccion || "",
+          token: contacto.token || "", cotizaciones: [], comprado: 0, saldo: 0 });
+      }
+      const g = grupos.get(clave);
+      g.cotizaciones.push(c);
+      if (!g.telefono) g.telefono = contacto.telefono || "";
+      if (!g.direccion) g.direccion = contacto.direccion || "";
+      if (!g.token) g.token = contacto.token || "";
+      if (esVendida(c)) { g.comprado += totalDeCliente(c); g.saldo += Math.max(0, totalDeCliente(c) - pagadoDe(c)); }
+    }
+    return [...grupos.values()];
+  }, [clientes.lista]);
+  const filtrados = lista.filter((g) => `${g.nombre} ${g.telefono} ${g.direccion}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const copiar = async (texto) => {
+    try { await navigator.clipboard.writeText(texto); avisar("Enlace copiado"); }
+    catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
+  };
+
+  return (
+    <div className="space-y-6">
+      <EncabezadoPagina icon={Contact} titulo="Clientes"
+        descripcion="Se llena solo con cada cotización. Cada cliente tiene un enlace propio donde ve el estado de sus pedidos." />
+      <section>
+        <div className="section-toolbar">
+          <h2 className="cond text-2xl font-semibold">Clientes <span className="muted font-medium">({lista.length})</span></h2>
+          {lista.length > 0 && (
+            <div className="relative w-48">
+              <Search size={16} className="absolute left-3 top-1/2 muted" style={{ transform: "translateY(-50%)" }} />
+              <input className="inp" style={{ paddingLeft: 32, fontSize: 15 }} placeholder="Nombre o teléfono"
+                value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar cliente" />
+            </div>
+          )}
+        </div>
+        {lista.length === 0 ? (
+          <div className="paper p-6 text-center muted">Aquí aparecerán tus clientes cuando registres o recibas la primera cotización.</div>
+        ) : filtrados.length === 0 ? (
+          <div className="paper p-6 text-center muted">Ningún cliente coincide con “{q}”.</div>
+        ) : (
+          <div className="space-y-3">
+            {filtrados.map((g) => {
+              const enlace = g.token ? `${window.location.origin}/cliente/${g.token}` : "";
+              const pendientes = g.cotizaciones.filter((c) => estadoDe(c) === "pendiente").length;
+              return (
+                <article key={g.clave} className="paper p-4">
+                  <div className="flex items-start justify-between gap-3" style={{ flexWrap: "wrap" }}>
+                    <div className="min-w-0">
+                      <h3 className="cond text-2xl font-semibold" style={{ overflowWrap: "anywhere", lineHeight: 1.1 }}>{g.nombre}</h3>
+                      <div className="text-sm muted mt-1 num" style={{ overflowWrap: "anywhere" }}>
+                        {g.telefono || "Sin teléfono"}{g.direccion ? ` · ${g.direccion}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                      {pendientes > 0 && <span className="chip">{pendientes} {pendientes === 1 ? "pendiente" : "pendientes"}</span>}
+                      {g.saldo > 0 && <span className="chip chip-info num">Debe {money(g.saldo)}</span>}
+                    </div>
+                  </div>
+                  <div className="pagos-resumen">
+                    <div><span className="lbl">Cotizaciones</span><b className="num">{g.cotizaciones.length}</b></div>
+                    <div><span className="lbl">Comprado (confirmadas)</span><b className="num">{money(g.comprado)}</b></div>
+                    <div className={`saldo ${g.saldo <= 0 ? "cero" : ""}`}><span className="lbl">Saldo</span><b className="num">{money(g.saldo)}</b></div>
+                  </div>
+                  <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
+                    {enlace
+                      ? <button className="btn btn-primary" onClick={() => copiar(enlace)}><Share2 size={16} />Copiar su enlace</button>
+                      : <span className="text-sm muted" style={{ alignSelf: "center" }}>Sin enlace propio: edita una de sus cotizaciones y guárdala para crearlo.</span>}
+                    {enlace && <a className="btn btn-ghost" style={{ textDecoration: "none" }} href={enlace} target="_blank" rel="noopener noreferrer"><Eye size={16} />Ver como cliente</a>}
+                    {numeroWhatsapp(g.telefono) && (
+                      <a className="btn btn-ghost" style={{ textDecoration: "none" }} target="_blank" rel="noopener noreferrer"
+                        href={`https://wa.me/${numeroWhatsapp(g.telefono)}${enlace ? `?text=${encodeURIComponent(`Hola ${g.nombre}, en este enlace puede ver el estado de sus pedidos:\n${enlace}`)}` : ""}`}>
+                        Enviarle su enlace por WhatsApp
+                      </a>
+                    )}
+                    <button className="btn btn-ghost" onClick={() => setAbierto(abierto === g.clave ? null : g.clave)} aria-expanded={abierto === g.clave}>
+                      {abierto === g.clave ? "Ocultar cotizaciones" : "Ver cotizaciones"}
+                    </button>
+                  </div>
+                  {abierto === g.clave && (
+                    <ul className="mt-3" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {g.cotizaciones.map((c) => (
+                        <li key={c.id} className="flex items-center gap-2 row-line text-sm" style={{ padding: "8px 0", flexWrap: "wrap" }}>
+                          <span className="num font-semibold">{c.numero}</span>
+                          <ChipEstado estado={estadoDe(c)} />
+                          <span className="muted flex-1">{soloFecha(c.fecha)}</span>
+                          <span className="num font-semibold">{money(totalDeCliente(c))}</span>
+                        </li>
+                      ))}
+                      <li style={{ paddingTop: 8 }}><button className="btn btn-ghost text-sm" onClick={() => irA("clientes")}>Ir a Cotizaciones clientes</button></li>
+                    </ul>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 const PUERTO_IMG = "https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3?w=1600&q=80&auto=format&fit=crop";
 
 function InicioView({ productos, internas, clientes, empresa, irA }) {
@@ -2272,8 +2408,9 @@ const TABS = [
   { id: "productos", label: "Producto", icon: Package },
   { id: "catalogo-interno", label: "Catálogo interno", corto: "Cat. interno", icon: BookOpen },
   { id: "catalogo-cliente", label: "Catálogo cliente", corto: "Cat. cliente", icon: Tag },
-  { id: "internas", label: "Cotizaciones internas", icon: FileTextIcon },
-  { id: "clientes", label: "Cotizaciones clientes", icon: Users },
+  { id: "internas", label: "Cotizaciones internas", corto: "Cot. internas", icon: FileTextIcon },
+  { id: "clientes", label: "Cotizaciones clientes", corto: "Cot. clientes", icon: Users },
+  { id: "directorio", label: "Clientes", icon: Contact },
 ];
 
 function AdminApp() {
@@ -2406,7 +2543,7 @@ function AdminApp() {
 
   const cambiarTab = (t) => {
     // Al abrir las cotizaciones de clientes se traen las que hayan llegado del catálogo.
-    if (t === "clientes" && supabase) sbLoadCotizacionesClientes().then((cc) => { if (cc) setClientes(cc); });
+    if ((t === "clientes" || t === "directorio") && supabase) sbLoadCotizacionesClientes().then((cc) => { if (cc) setClientes(cc); });
     setTab(t);
     setMenuAbierto(false);
     window.scrollTo({ top: 0 });
@@ -2484,6 +2621,7 @@ function AdminApp() {
                   <CotizacionInternaView cotiz={internas} guardarCotizaciones={guardarInternas}
                     clientes={clientes} avisar={avisar} empresa={empresa} />
                 )}
+                {tab === "directorio" && <ClientesView clientes={clientes} avisar={avisar} irA={cambiarTab} />}
                 {tab === "clientes" && (
                   <CotizacionClienteView productos={productos} cotiz={clientes} guardarCotizaciones={guardarClientes}
                     internas={internas} guardarInternas={guardarInternas} avisar={avisar}
@@ -2502,7 +2640,7 @@ function AdminApp() {
             <button key={item.id} className="mobile-nav-item" aria-selected={tab === item.id}
               onClick={() => cambiarTab(item.id)}>
               <Icon size={20} />
-              <span>{item.id === "internas" ? "Internas" : item.id === "clientes" ? "Clientes" : item.corto || item.label}</span>
+              <span>{item.corto || item.label}</span>
             </button>
           );
         })}
@@ -2537,6 +2675,7 @@ export default function App() {
   if (ruta === "/catalogo") return <Catalogo modo="cliente" />;
   if (ruta === "/catalogo-interno") return <Catalogo modo="interno" />;
   if (ruta.startsWith("/cotizacion/")) return <VistaCotizacion id={ruta.slice("/cotizacion/".length)} />;
+  if (ruta.startsWith("/cliente/")) return <VistaCliente token={ruta.slice("/cliente/".length)} />;
   return <AdminApp />;
 }
 
