@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight } from "lucide-react";
+import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList } from "lucide-react";
 import { LOGO_POR_DEFECTO } from "./logo.js";
 import { leerDescripcion } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
@@ -50,7 +50,7 @@ const ESTILOS = `
 .cat-pill:focus-visible, .cat-card:focus-visible, .cat-btn:focus-visible, .cat-cerrar:focus-visible { outline:3px solid #F2B705; outline-offset:2px; }
 
 .cat-cuenta { color:#5B6B75; font-size:14px; margin:20px 0 14px; }
-.cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(270px,100%),1fr)); gap:18px; padding-bottom:56px; }
+.cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(270px,100%),1fr)); gap:18px; padding-bottom:96px; }
 .cat-card { background:#fff; border:1px solid #D5DEE3; border-radius:16px; overflow:hidden; text-align:left; padding:0;
   display:flex; flex-direction:column; cursor:pointer; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
 .cat-card:hover { transform:translateY(-4px); box-shadow:0 16px 36px rgba(20,34,43,.14); border-color:#9FB9C0; }
@@ -179,6 +179,54 @@ const ESTILOS = `
 .cat-otro input { width:58px; border:1px solid #CAD4DA; border-radius:8px; padding:7px 8px; font-size:14px; background:#fff; color:#14222B; }
 .cat-cbm input { width:86px; font-size:17px; font-weight:700; }
 .cat-dato small + b + small { display:block; margin-top:2px; font-weight:500; }
+.cat-estado-wa { margin-top:8px !important; color:#F2B705 !important; font-size:14.5px !important; }
+.cat-pedir { margin-top:auto; padding:0 14px 14px; }
+.cat-agregar { width:100%; justify-content:center; background:#fff; color:#1B5E6B; border:1.5px solid #1B5E6B; }
+.cat-agregar:hover { background:#E4EFF1; }
+.cat-cantidad { display:flex; align-items:center; justify-content:space-between; gap:6px; background:#E4EFF1; border-radius:8px; padding:4px;
+  font-size:14px; font-weight:600; color:#134650; min-width:0; }
+.cat-cantidad button { width:36px; height:36px; flex-shrink:0; border:0; border-radius:6px; background:#1B5E6B; color:#fff; display:flex; align-items:center; justify-content:center; }
+.cat-cantidad button:hover { background:#134650; }
+.cat-cantidad button:focus-visible, .cat-flotante:focus-visible { outline:3px solid #F2B705; outline-offset:2px; }
+.cat-flotante { position:fixed; left:50%; bottom:max(16px,env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:40; border:0; border-radius:999px;
+  background:#14222B; color:#fff; padding:12px 14px 12px 18px; display:flex; align-items:center; gap:10px; font-size:15px; font-weight:600;
+  box-shadow:0 10px 30px rgba(20,34,43,.4); max-width:calc(100vw - 24px); white-space:nowrap; }
+.cat-flotante b { background:#F2B705; color:#14222B; border-radius:999px; padding:6px 12px; font-size:14px; }
+.cat-panel { max-width:640px; }
+.cat-panel-in { padding:24px 24px 22px; }
+.cat-panel-in h2 { font-size:34px; font-weight:700; margin:0 0 14px; line-height:1; }
+.cat-lineas { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.cat-lineas li { display:flex; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid #E6ECEF; flex-wrap:wrap; }
+.cat-linea-foto { width:60px; height:60px; flex-shrink:0; border:1px solid #E6ECEF; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#fff; }
+.cat-linea-foto img { width:100%; height:100%; object-fit:contain; padding:3px; }
+.cat-linea-info { flex:1 1 160px; min-width:0; display:flex; flex-direction:column; gap:1px; overflow-wrap:anywhere; }
+.cat-linea-info b { font-family:'Barlow Condensed',sans-serif; font-size:21px; line-height:1.05; }
+.cat-linea-info span { font-size:14px; color:#314551; line-height:1.3; }
+.cat-linea-info small { font-size:13px; color:#5B6B75; }
+.cat-linea-cant { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 190px; }
+.cat-linea-cant .cat-cantidad { width:100%; }
+.cat-total { display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding:14px 0 6px; font-weight:600; }
+.cat-total b { font-family:'Barlow Condensed',sans-serif; font-size:32px; color:#134650; }
+.cat-campos { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+.cat-campos label { display:flex; flex-direction:column; gap:4px; font-size:13px; font-weight:600; color:#5B6B75; }
+.cat-campos .ancho { grid-column:1 / -1; }
+.cat-campos input, .cat-campos textarea { border:1px solid #CAD4DA; background:#F6F8F9; border-radius:8px; padding:11px 12px; font-size:16px; color:#14222B; font-family:inherit; width:100%; }
+.cat-campos input:focus, .cat-campos textarea:focus { outline:3px solid #F2B705; outline-offset:1px; background:#fff; }
+.cat-error { color:#A3321F; font-weight:600; font-size:14.5px; margin:10px 0 0; }
+.cat-panel-botones { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; margin-top:16px; }
+.cat-enviar { background:#128C4A; padding:12px 18px; }
+.cat-enviar:hover { background:#0E6F3B; }
+.cat-nota-envio { font-size:13px; color:#5B6B75; text-align:right; margin:8px 0 0; }
+.cat-enviado { color:#134650; }
+.cat-enviado p { font-size:16px; line-height:1.5; margin:8px 0 0; }
+@media (max-width:560px) {
+  .cat-panel-in { padding:20px 16px; }
+  .cat-campos { grid-template-columns:1fr; }
+  .cat-linea-cant { flex:1 1 100%; flex-direction:row; align-items:center; justify-content:space-between; }
+  .cat-linea-cant .cat-cantidad { width:auto; flex:1; }
+  .cat-panel-botones .cat-btn { flex:1 1 100%; justify-content:center; }
+  .cat-flotante span { overflow:hidden; text-overflow:ellipsis; }
+}
 .cat-venta { display:flex; flex-direction:column; gap:3px; }
 .cat-venta span { font-size:12px; font-weight:600; color:#5B6B75; }
 .cat-venta input { border:1px solid #E2C45C; background:#FFF9E6; border-radius:8px; padding:9px 10px; font-size:19px; font-weight:700; color:#14222B; width:100%; }
@@ -265,7 +313,7 @@ function EditorPrecio({ p, guardar }) {
   );
 }
 
-function Tarjeta({ p, modo, abrir, guardar }) {
+function Tarjeta({ p, modo, abrir, guardar, pedir }) {
   const precio = modo === "cliente" ? p.venta : p.producto;
   const contenido = <>
     <div className="cat-foto">
@@ -293,6 +341,14 @@ function Tarjeta({ p, modo, abrir, guardar }) {
       )}
     </div>
   </>;
+  if (pedir) {
+    return (
+      <div className="cat-card cat-card-editable">
+        <button type="button" className="cat-card-abrir" onClick={abrir} aria-label={`Ver ${p.codigo}, ${p.nombre}`}>{contenido}</button>
+        <div className="cat-pedir"><Cantidad codigo={p.codigo} cantidad={pedir.pedido[p.codigo] || 0} cambiar={pedir.cambiar} /></div>
+      </div>
+    );
+  }
   if (!guardar) return <button type="button" className="cat-card" onClick={abrir} aria-label={`Ver ${p.codigo}, ${p.nombre}`}>{contenido}</button>;
   return (
     <div className="cat-card cat-card-editable">
@@ -302,7 +358,7 @@ function Tarjeta({ p, modo, abrir, guardar }) {
   );
 }
 
-function Ficha({ p, modo, cerrar }) {
+function Ficha({ p, modo, cerrar, pedir }) {
   const [copiado, setCopiado] = useState(false);
   useEffect(() => {
     const tecla = (e) => { if (e.key === "Escape") cerrar(); };
@@ -361,7 +417,8 @@ function Ficha({ p, modo, cerrar }) {
               </div>
             )}
             {f.empaque && <div className="cat-dato"><small>Medidas de empaque</small><b className="cat-num">{f.empaque}</b></div>}
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              {pedir && <Cantidad completo codigo={p.codigo} cantidad={pedir.pedido[p.codigo] || 0} cambiar={pedir.cambiar} />}
               <button type="button" className="cat-btn claro" onClick={compartir}>
                 {copiado ? <><Check size={17} />Enlace copiado</> : <><Share2 size={17} />Compartir este equipo</>}
               </button>
@@ -490,6 +547,147 @@ function GananciaGeneral({ cuantos, aplicar }) {
   );
 }
 
+/* ---------- cotización que arma el cliente y envía por WhatsApp ---------- */
+const CLAVE_PEDIDO = "catalogo-mi-cotizacion";
+const leerGuardado = (clave, porDefecto) => {
+  try { return JSON.parse(window.localStorage.getItem(clave)) ?? porDefecto; } catch { return porDefecto; }
+};
+const guardarLocal = (clave, valor) => { try { window.localStorage.setItem(clave, JSON.stringify(valor)); } catch { /* sin almacenamiento */ } };
+
+/** Deja el número listo para wa.me: solo dígitos, con el código de Nicaragua (505) si viene de 8 dígitos. */
+export const numeroWhatsapp = (texto) => {
+  const d = String(texto || "").replace(/\D/g, "");
+  return d.length === 8 ? `505${d}` : d.length >= 10 ? d : "";
+};
+
+export function mensajeCotizacion({ nombre, telefono, nota, lineas, total, hayConsultar }) {
+  return [
+    "*Solicitud de cotización*",
+    `Cliente: ${nombre}`,
+    `Teléfono: ${telefono}`,
+    "",
+    ...lineas.map((l) => `• ${l.cantidad} × ${l.codigo} · ${l.nombre}: ${l.venta > 0 ? `${dinero(l.venta)} c/u` : "precio por consultar"}`),
+    ...(total > 0 ? ["", `Total${hayConsultar ? " (sin los equipos por consultar)" : ""}: ${dinero(total)}`] : []),
+    ...(nota ? ["", `Nota: ${nota}`] : []),
+    "",
+    "Enviado desde el catálogo de Taller Gregoriana",
+  ].join("\n");
+}
+
+function Cantidad({ codigo, cantidad, cambiar, completo }) {
+  if (!cantidad) {
+    return (
+      <button type="button" className={`cat-btn ${completo ? "" : "cat-agregar"}`} onClick={() => cambiar(codigo, 1)}>
+        <Plus size={17} />Agregar a mi cotización
+      </button>
+    );
+  }
+  return (
+    <div className="cat-cantidad" role="group" aria-label={`Cantidad de ${codigo}`}>
+      <button type="button" onClick={() => cambiar(codigo, cantidad - 1)} aria-label={cantidad === 1 ? "Quitar de mi cotización" : "Uno menos"}>
+        {cantidad === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
+      </button>
+      <span className="cat-num" aria-live="polite">{cantidad} en tu cotización</span>
+      <button type="button" onClick={() => cambiar(codigo, cantidad + 1)} aria-label="Uno más"><Plus size={16} /></button>
+    </div>
+  );
+}
+
+function PanelCotizacion({ lineas, cambiar, vaciar, whatsapp, cerrar }) {
+  const [datos, setDatos] = useState(() => leerGuardado(`${CLAVE_PEDIDO}-datos`, { nombre: "", telefono: "" }));
+  const [nota, setNota] = useState("");
+  const [error, setError] = useState("");
+  const [enviado, setEnviado] = useState(false);
+  useEffect(() => {
+    const tecla = (e) => { if (e.key === "Escape") cerrar(); };
+    const previo = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", tecla);
+    return () => { document.body.style.overflow = previo; window.removeEventListener("keydown", tecla); };
+  }, [cerrar]);
+
+  const total = lineas.reduce((s, l) => s + l.venta * l.cantidad, 0);
+  const hayConsultar = lineas.some((l) => l.venta <= 0);
+  const set = (k) => (e) => setDatos((d) => ({ ...d, [k]: e.target.value }));
+
+  const enviar = (e) => {
+    e.preventDefault();
+    const nombre = datos.nombre.trim(), telefono = datos.telefono.trim();
+    if (!nombre) { setError("Escribe tu nombre."); return; }
+    if (telefono.replace(/\D/g, "").length < 8) { setError("Escribe tu número de teléfono completo."); return; }
+    setError("");
+    guardarLocal(`${CLAVE_PEDIDO}-datos`, { nombre, telefono });
+    const texto = mensajeCotizacion({ nombre, telefono, nota: nota.trim(), lineas, total, hayConsultar });
+    window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(texto)}`, "_blank", "noopener");
+    setEnviado(true);
+  };
+
+  return (
+    <div className="cat-fondo" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrar(); }}>
+      <section className="cat-ficha cat-panel" role="dialog" aria-modal="true" aria-label="Mi cotización">
+        <button type="button" className="cat-cerrar" onClick={cerrar} aria-label="Cerrar mi cotización"><X size={20} /></button>
+        <div className="cat-panel-in">
+          <h2 className="cat-cond">Mi cotización</h2>
+          {enviado ? (
+            <div className="cat-enviado" role="status">
+              <Check size={28} />
+              <p><b>Se abrió WhatsApp con tu cotización.</b> Toca “Enviar” en WhatsApp para que la recibamos.</p>
+              <div className="cat-panel-botones">
+                <button type="button" className="cat-btn claro" onClick={() => setEnviado(false)}>Volver a mi cotización</button>
+                <button type="button" className="cat-btn" onClick={() => { vaciar(); cerrar(); }}>Listo, vaciar mi cotización</button>
+              </div>
+            </div>
+          ) : !lineas.length ? (
+            <p className="cat-resumen">Todavía no has agregado equipos. Toca “Agregar a mi cotización” en los equipos que te interesan.</p>
+          ) : (
+            <form onSubmit={enviar} noValidate>
+              <ul className="cat-lineas">
+                {lineas.map((l) => (
+                  <li key={l.codigo}>
+                    <div className="cat-linea-foto"><Foto src={l.foto} alt="" /></div>
+                    <div className="cat-linea-info">
+                      <b className="cat-num">{l.codigo}</b>
+                      <span>{l.nombre}</span>
+                      <small className="cat-num">{l.venta > 0 ? `${dinero(l.venta)} c/u` : "Precio por consultar"}</small>
+                    </div>
+                    <div className="cat-linea-cant">
+                      <Cantidad codigo={l.codigo} cantidad={l.cantidad} cambiar={cambiar} />
+                      {l.venta > 0 && <b className="cat-num">{dinero(l.venta * l.cantidad)}</b>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {total > 0 && (
+                <div className="cat-total">
+                  <span>Total{hayConsultar && " (sin los equipos por consultar)"}</span>
+                  <b className="cat-num">{dinero(total)}</b>
+                </div>
+              )}
+              <div className="cat-campos">
+                <label>Tu nombre
+                  <input value={datos.nombre} onChange={set("nombre")} autoComplete="name" />
+                </label>
+                <label>Tu teléfono o WhatsApp
+                  <input value={datos.telefono} onChange={set("telefono")} inputMode="tel" autoComplete="tel" placeholder="8888 8888" />
+                </label>
+                <label className="ancho">Nota (opcional)
+                  <textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ciudad, fecha en que lo necesitas, preguntas" />
+                </label>
+              </div>
+              {error && <p className="cat-error" role="alert">{error}</p>}
+              <div className="cat-panel-botones">
+                <button type="button" className="cat-btn claro" onClick={vaciar}>Vaciar</button>
+                <button type="submit" className="cat-btn cat-enviar"><Send size={17} />Enviar cotización por WhatsApp</button>
+              </div>
+              <p className="cat-nota-envio">Se abrirá WhatsApp con el mensaje listo. Solo tienes que tocar “Enviar”.</p>
+            </form>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 const RUTAS = { cliente: "/catalogo", interno: "/catalogo-interno" };
 const API = { cliente: "/api/catalogo", interno: "/api/catalogo-interno" };
 const TITULOS = { cliente: "Catálogo para clientes", interno: "Catálogo interno" };
@@ -498,7 +696,7 @@ const TITULOS = { cliente: "Catálogo para clientes", interno: "Catálogo intern
  * modo "cliente": precio de venta, sin costos. modo "interno": precio de costo, flete y CBM.
  * Con `productos` se muestra dentro de la app; con `guardarPrecio` cada equipo trae su editor de precio de venta.
  */
-export default function Catalogo({ modo = "cliente", productos: propios, guardarPrecio, aplicarGanancia, cambiarPrecioCbm, avisar }) {
+export default function Catalogo({ modo = "cliente", productos: propios, guardarPrecio, aplicarGanancia, cambiarPrecioCbm, whatsapp: whatsappPropio, avisar }) {
   const dentro = Array.isArray(propios);
   const [descargados, setProductos] = useState([]);
   const [descarga, setEstado] = useState("cargando");
@@ -552,6 +750,29 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
   const seleccionado = abierto ? productos.find((p) => p.codigo.toLowerCase() === abierto.toLowerCase()) : null;
   const sinPrecio = productos.filter((p) => p.venta <= 0).length;
 
+  // Cotización del cliente: solo en el catálogo público de clientes y si el taller configuró su WhatsApp.
+  const [whatsapp, setWhatsapp] = useState("");
+  const [pedido, setPedido] = useState(() => leerGuardado(CLAVE_PEDIDO, {}));
+  const [panel, setPanel] = useState(false);
+  useEffect(() => {
+    if (dentro || modo !== "cliente") return;
+    let vivo = true;
+    fetch("/api/contacto", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo && d) setWhatsapp(numeroWhatsapp(d.whatsapp)); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [dentro, modo]);
+  const cambiarPedido = useMemo(() => (codigo, cantidad) => setPedido((actual) => {
+    const nuevo = { ...actual };
+    if (cantidad > 0) nuevo[codigo] = Math.min(99, cantidad); else delete nuevo[codigo];
+    guardarLocal(CLAVE_PEDIDO, nuevo);
+    return nuevo;
+  }), []);
+  const vaciarPedido = () => { guardarLocal(CLAVE_PEDIDO, {}); setPedido({}); };
+  const pedir = whatsapp ? { pedido, cambiar: cambiarPedido } : null;
+  const lineas = productos.filter((p) => pedido[p.codigo] > 0).map((p) => ({ ...p, cantidad: pedido[p.codigo] }));
+  const unidades = lineas.reduce((s, l) => s + l.cantidad, 0);
+  const cerrarPanel = useMemo(() => () => setPanel(false), []);
+
   return (
     <div className={`cat cat-${modo}${dentro ? " cat-dentro" : ""}`}>
       <style>{ESTILOS}</style>
@@ -568,6 +789,9 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
           </> : dentro ? <>
             <h1>Catálogo para <em>clientes</em></h1>
             <p>Define aquí el precio de venta de cada equipo. Tus clientes solo ven el precio de venta, nunca el costo.</p>
+            <p className="cat-estado-wa">{numeroWhatsapp(whatsappPropio)
+              ? `Tus clientes pueden armar su cotización y enviártela al WhatsApp +${numeroWhatsapp(whatsappPropio)}.`
+              : "Para que tus clientes te envíen su cotización por WhatsApp, escribe tu número en Producto, en los datos de tu empresa."}</p>
           </> : <>
             <h1>Catálogo de <em>equipos</em> para taller</h1>
             <p>Elevadores, alineadoras, desmontadoras, balanceadoras y más. Toca un equipo para ver su ficha técnica completa.</p>
@@ -610,13 +834,22 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
                 <p style={{ margin: "0 0 14px" }}>Ningún equipo coincide con tu búsqueda.</p>
                 <button type="button" className="cat-btn" onClick={() => { setQ(""); setCategoria(""); }}>Ver todos los equipos</button>
               </div>
-            ) : <div className="cat-grid">{filtrados.map((p) => <Tarjeta key={p.id} p={p} modo={modo} abrir={() => abrir(p.codigo)} guardar={guardarPrecio} />)}</div>}
+            ) : <div className="cat-grid">{filtrados.map((p) => <Tarjeta key={p.id} p={p} modo={modo} abrir={() => abrir(p.codigo)} guardar={guardarPrecio} pedir={pedir} />)}</div>}
         </>}
       </main>
 
       <footer className="cat-pie-pagina">Taller Gregoriana · Precios en dólares.</footer>
 
-      {seleccionado && <Ficha p={seleccionado} modo={modo} cerrar={cerrar} />}
+      {seleccionado && <Ficha p={seleccionado} modo={modo} cerrar={cerrar} pedir={pedir} />}
+
+      {pedir && unidades > 0 && !panel && (
+        <button type="button" className="cat-flotante" onClick={() => setPanel(true)}>
+          <ClipboardList size={20} />
+          <span>Mi cotización · {unidades} {unidades === 1 ? "equipo" : "equipos"}</span>
+          <b>Ver y enviar</b>
+        </button>
+      )}
+      {pedir && panel && <PanelCotizacion lineas={lineas} cambiar={cambiarPedido} vaciar={vaciarPedido} whatsapp={whatsapp} cerrar={cerrarPanel} />}
     </div>
   );
 }

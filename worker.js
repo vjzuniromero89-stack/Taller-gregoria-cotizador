@@ -61,6 +61,13 @@ export default {
       }, result.ok ? 200 : result.status);
     }
 
+    // WhatsApp del taller, para que el catálogo de clientes pueda enviarle cotizaciones.
+    if (url.pathname === "/api/contacto" && request.method === "GET") {
+      const r = await sbRequest(env, "configuracion?clave=eq.empresa&select=valor&limit=1");
+      const valor = r.ok && Array.isArray(r.data) && r.data[0]?.valor && typeof r.data[0].valor === "object" ? r.data[0].valor : {};
+      return json({ nombre: String(valor.nombre || ""), whatsapp: String(valor.whatsapp || "").replace(/\D/g, "") });
+    }
+
     // Catálogo para clientes: solo precio de venta, nunca costos. Catálogo interno: costos, flete y CBM.
     const campos = request.method === "GET" && CATALOGOS[url.pathname];
     if (campos) {

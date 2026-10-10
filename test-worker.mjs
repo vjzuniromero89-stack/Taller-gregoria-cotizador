@@ -37,4 +37,9 @@ globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.g
 r=await worker.fetch(req('/api/catalogo-interno'),env);assert.equal(r.status,200);const interno=await r.json();assert.equal(interno[0].precio_producto,10);assert.equal(interno[0].precio_cbm,5);assert.equal('creado' in interno[0],false);
 globalThis.fetch=async()=>Response.json({message:'internal error'},{status:403});
 r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,503);assert.equal((await r.text()).includes('internal error'),false);
+globalThis.fetch=async(url)=>{assert.equal(new URL(url).pathname,'/rest/v1/configuracion');return Response.json([{valor:{nombre:'Taller',whatsapp:'+505 8888-8888',logo:'data:secreto'}}]);};
+r=await worker.fetch(req('/api/contacto'),env);assert.equal(r.status,200);const contacto=await r.json();assert.deepEqual(contacto,{nombre:'Taller',whatsapp:'50588888888'});
+globalThis.fetch=async()=>Response.json({message:'x'},{status:500});
+r=await worker.fetch(req('/api/contacto'),env);assert.deepEqual(await r.json(),{nombre:'',whatsapp:''});
 console.log('Catálogo: paginación, campos públicos y errores verificados.');
+console.log('Contacto: solo nombre y WhatsApp, sin otros datos de la empresa.');

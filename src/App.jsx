@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
-import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, precioConGanancia } from "./Catalogo.jsx";
+import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, precioConGanancia, numeroWhatsapp } from "./Catalogo.jsx";
 import { FICHA_VACIA, armarDescripcion, leerDescripcion, cbmDeMedidas } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
@@ -1255,6 +1255,7 @@ const VACIO = { codigo: "", nombre: "", categoria: "", cbm: "", peso: "", precio
 const EMPRESA_POR_DEFECTO = {
   nombre: "Taller Gregoriana",
   contacto: "Taller Mecánico y Lubricentro",
+  whatsapp: "",
   logo: LOGO_POR_DEFECTO,
 };
 
@@ -1279,7 +1280,7 @@ function EmpresaCard({ empresa, guardarEmpresa, avisar }) {
   }
 
   async function guardar() {
-    const ok = await guardarEmpresa({ nombre: form.nombre.trim(), contacto: form.contacto.trim(), logo: form.logo || "" });
+    const ok = await guardarEmpresa({ nombre: form.nombre.trim(), contacto: form.contacto.trim(), whatsapp: (form.whatsapp || "").trim(), logo: form.logo || "" });
     if (ok) { avisar("Datos de tu empresa guardados"); setAbierto(false); }
   }
 
@@ -1326,6 +1327,15 @@ function EmpresaCard({ empresa, guardarEmpresa, avisar }) {
             <label className="lbl" htmlFor="e-contacto">Contacto</label>
             <textarea id="e-contacto" className="inp" rows={2} placeholder="Teléfono, correo, dirección"
               value={form.contacto} onChange={set("contacto")} />
+          </div>
+          <div>
+            <label className="lbl" htmlFor="e-whatsapp">WhatsApp para recibir cotizaciones</label>
+            <input id="e-whatsapp" className="inp num" inputMode="tel" placeholder="8888 8888" value={form.whatsapp || ""} onChange={set("whatsapp")} />
+            <p className="muted text-sm mt-1">
+              {numeroWhatsapp(form.whatsapp)
+                ? `Las cotizaciones del catálogo de clientes llegarán al +${numeroWhatsapp(form.whatsapp)}.`
+                : "Escribe los 8 dígitos de tu celular de Nicaragua, o el número completo con código de país."}
+            </p>
           </div>
           <button className="btn btn-primary" onClick={guardar}>Guardar datos</button>
         </div>
@@ -2174,6 +2184,7 @@ function AdminApp() {
         ? {
             nombre: em.nombre || EMPRESA_POR_DEFECTO.nombre,
             contacto: em.contacto || EMPRESA_POR_DEFECTO.contacto,
+            whatsapp: em.whatsapp || "",
             logo: em.logo || EMPRESA_POR_DEFECTO.logo,
           }
         : EMPRESA_POR_DEFECTO);
@@ -2330,7 +2341,7 @@ function AdminApp() {
                 )}
                 {tab === "catalogo-interno" && <Catalogo modo="interno" productos={productos} avisar={avisar} cambiarPrecioCbm={cambiarPrecioCbm} />}
                 {tab === "catalogo-cliente" && (
-                  <Catalogo modo="cliente" productos={productos} avisar={avisar}
+                  <Catalogo modo="cliente" productos={productos} avisar={avisar} whatsapp={empresa.whatsapp}
                     guardarPrecio={guardarPrecioVenta} aplicarGanancia={aplicarGanancia} />
                 )}
                 {tab === "internas" && (
