@@ -6,6 +6,9 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
+import CatalogoPublico from "./Catalogo.jsx";
+import { FICHA_VACIA, armarDescripcion, leerDescripcion, cbmDeMedidas } from "./descripcion.js";
+import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
 const runtimeEnv = globalThis.__APP_CONFIG__ || {};
 const SUPABASE_URL = runtimeEnv.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || "";
@@ -1234,7 +1237,7 @@ function EncabezadoPagina({ icon: Icon, titulo, descripcion }) {
   );
 }
 
-const VACIO = { codigo: "", nombre: "", descripcion: "", categoria: "", cbm: "", peso: "", precioCbm: "", precioProducto: "", precioVenta: "", foto: "" };
+const VACIO = { codigo: "", nombre: "", categoria: "", cbm: "", peso: "", precioCbm: "", precioProducto: "", precioVenta: "", foto: "", ...FICHA_VACIA };
 const EMPRESA_POR_DEFECTO = {
   nombre: "Taller Gregoriana",
   contacto: "Taller Mecánico y Lubricentro",
@@ -1340,7 +1343,7 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
     if (!categoriaEscrita) { setError("Selecciona o escribe una categoría para el producto."); return; }
     const categoria = categorias.find(c => c.toLocaleLowerCase("es") === categoriaEscrita.toLocaleLowerCase("es")) || categoriaEscrita;
     const item = {
-      id: editId || uid(), codigo, nombre, categoria, descripcion: form.descripcion.trim(),
+      id: editId || uid(), codigo, nombre, categoria, descripcion: armarDescripcion(form),
       cbm: num(form.cbm), peso: num(form.peso), precioCbm: num(form.precioCbm),
       precioProducto: num(form.precioProducto), precioVenta: num(form.precioVenta), foto: form.foto,
     };
@@ -1357,7 +1360,8 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
   function editar(p) {
     setCreandoCategoria(false);
     setForm({
-      codigo: p.codigo, nombre: p.nombre, descripcion: p.descripcion || "", categoria: p.categoria || "Sin categoría", cbm: String(p.cbm), peso: p.peso ? String(p.peso) : "",
+      ...leerDescripcion(p.descripcion).campos,
+      codigo: p.codigo, nombre: p.nombre, categoria: p.categoria || "Sin categoría", cbm: String(p.cbm), peso: p.peso ? String(p.peso) : "",
       precioCbm: String(p.precioCbm), precioProducto: String(p.precioProducto),
       precioVenta: p.precioVenta ? String(p.precioVenta) : "", foto: p.foto || "",
     });
@@ -1376,6 +1380,22 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
     if (editId === id) { setEditId(null); setForm(VACIO); }
   }
 
+  const porImportar = useMemo(() => {
+    const codigos = new Set(productos.map((p) => p.codigo.toLowerCase()));
+    return CATALOGO_XPROMISE.filter((p) => !codigos.has(p.codigo.toLowerCase()));
+  }, [productos]);
+
+  async function importarXpromise() {
+    if (guardando || !porImportar.length) return;
+    const cuantos = porImportar.length;
+    setGuardando(true);
+    const ok = await guardarProductos([...porImportar, ...productos]);
+    setGuardando(false);
+    if (ok) avisar(`${cuantos} productos XPROMISE agregados`);
+  }
+
+  const medidasCbm = cbmDeMedidas(form.empaque);
+
   const filtrados = useMemo(() => {
     const s = q.trim().toLowerCase();
     return productos.filter(p => (!categoriaFiltro || (p.categoria || "Sin categoría") === categoriaFiltro) &&
@@ -1388,6 +1408,21 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
         descripcion="Administra el catálogo, los costos, el peso y el CBM facturable de cada producto." />
       <EnlaceCatalogo avisar={avisar} />
       <EmpresaCard empresa={empresa} guardarEmpresa={guardarEmpresa} avisar={avisar} />
+
+      {porImportar.length > 0 && (
+        <section className="paper p-4" style={{ borderColor: "#E2C45C", background: "#FFFBEA" }}>
+          <h2 className="cond text-2xl font-semibold">Catálogo XPROMISE</h2>
+          <p className="muted text-sm mt-1">
+            {porImportar.length === CATALOGO_XPROMISE.length
+              ? `Agrega los ${porImportar.length} equipos del catálogo XPROMISE con foto, precio, medidas y ficha técnica.`
+              : `Faltan ${porImportar.length} de ${CATALOGO_XPROMISE.length} equipos del catálogo XPROMISE.`}
+            {" "}Después puedes editar cada uno para completar el precio CBM y el precio de venta.
+          </p>
+          <button className="btn btn-primary mt-3" onClick={importarXpromise} disabled={guardando}>
+            <Plus size={17} />{guardando ? "Agregando…" : `Agregar ${porImportar.length} productos XPROMISE`}
+          </button>
+        </section>
+      )}
 
       <section className="form-card">
         <h2 className="cond text-2xl font-semibold mb-3">{editId ? "Editar producto" : "Nuevo producto"}</h2>
@@ -1419,6 +1454,26 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
                 setCreandoCategoria(v => !v); setForm(f => ({ ...f, categoria: "" }));
               }}>{creandoCategoria ? "Elegir categoría existente" : "Nueva categoría"}</button>
               {creandoCategoria && <p className="muted text-sm mt-1">La categoría se guardará junto con el producto.</p>}
+            </div>
+
+            <div className="form-grid-cod">
+              <div>
+                <label className="lbl" htmlFor="p-marca">Marca</label>
+                <input id="p-marca" className="inp" value={form.marca} onChange={set("marca")} />
+              </div>
+              <div>
+                <label className="lbl" htmlFor="p-empaque">Medidas de empaque (largo × ancho × alto)</label>
+                <input id="p-empaque" className="inp num" placeholder="Ejemplo: 3850 × 540 × 800 mm" value={form.empaque} onChange={set("empaque")} />
+                {medidasCbm > 0 && (
+                  <p className="text-sm muted mt-1 num" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    Estas medidas dan {m3(medidasCbm)} m³.
+                    {num(form.cbm) !== medidasCbm && (
+                      <button type="button" className="btn btn-ghost text-sm" style={{ padding: "4px 10px" }}
+                        onClick={() => setForm((f) => ({ ...f, cbm: String(medidasCbm) }))}>Usar como CBM</button>
+                    )}
+                  </p>
+                )}
+              </div>
             </div>
 
 
@@ -1460,6 +1515,39 @@ function ProductosView({ productos, guardarProductos, eliminarProducto, avisar, 
 
             <p className="text-sm muted" style={{ lineHeight: 1.3 }}>
               El precio de venta es opcional. Se carga solo en las cotizaciones clientes.
+            </p>
+
+            <div>
+              <label className="lbl" htmlFor="p-resumen">Descripción</label>
+              <textarea id="p-resumen" className="inp" rows={2} placeholder="Qué es y para qué sirve el producto"
+                value={form.resumen} onChange={set("resumen")} />
+            </div>
+            <div className="form-grid-2">
+              <div>
+                <label className="lbl" htmlFor="p-caracteristicas">Características (una por línea)</label>
+                <textarea id="p-caracteristicas" className="inp" rows={5} placeholder={"Cable de acero de 10 mm\nCuatro adaptadores"}
+                  value={form.caracteristicas} onChange={set("caracteristicas")} />
+              </div>
+              <div>
+                <label className="lbl" htmlFor="p-ficha">Ficha técnica (dato: valor, uno por línea)</label>
+                <textarea id="p-ficha" className="inp" rows={5} placeholder={"Capacidad de elevación: 4000 kg\nMotor: 220 V, 2.2 kW"}
+                  value={form.ficha} onChange={set("ficha")} />
+              </div>
+            </div>
+            <div className="form-grid-2">
+              <div>
+                <label className="lbl" htmlFor="p-incluye">Incluye (un artículo por línea)</label>
+                <textarea id="p-incluye" className="inp" rows={3} placeholder="Caja de herramientas × 1"
+                  value={form.incluye} onChange={set("incluye")} />
+              </div>
+              <div>
+                <label className="lbl" htmlFor="p-opcionales">Accesorios opcionales (uno por línea)</label>
+                <textarea id="p-opcionales" className="inp" rows={3}
+                  value={form.opcionales} onChange={set("opcionales")} />
+              </div>
+            </div>
+            <p className="text-sm muted" style={{ lineHeight: 1.3 }}>
+              Estos datos aparecen en la ficha del producto dentro del catálogo.
             </p>
 
             {error && <p className="text-sm font-medium" style={{ color: "#A3321F" }} role="alert">{error}</p>}
@@ -2256,8 +2344,8 @@ function EnlaceCatalogo({ avisar }) {
     catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
   };
   return <section className="paper p-4">
-    <h2 className="cond text-2xl font-semibold">Compartir productos con mi socio</h2>
-    <p className="muted text-sm mt-1">Comparte las mismas fichas y datos que ves en Productos.</p>
+    <h2 className="cond text-2xl font-semibold">Catálogo para compartir</h2>
+    <p className="muted text-sm mt-1">Un catálogo con fotos, precios y ficha técnica de cada producto que guardes aquí.</p>
     <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
       <input className="inp" style={{ flex: "1 1 240px" }} aria-label="Enlace del catálogo" readOnly value={enlace} onFocus={e => e.target.select()} />
       <button className="btn btn-primary" onClick={copiar}><Share2 size={17} />Copiar enlace</button>
@@ -2266,55 +2354,13 @@ function EnlaceCatalogo({ avisar }) {
   </section>;
 }
 
-function CatalogoPublico() {
-  const [productos, setProductos] = useState([]);
-  const [q, setQ] = useState("");
-  const [categoriaFiltro, setCategoriaFiltro] = useState("");
-  const categorias = [...new Set(productos.map(p => p.categoria || "Sin categoría"))].sort((a, b) => a.localeCompare(b, "es"));
-  const [estado, setEstado] = useState("cargando");
-  const [intento, setIntento] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    setEstado("cargando");
-    (async () => {
-      try {
-        const res = await fetch("/api/catalogo", { cache: "no-store", signal: controller.signal });
-        const data = await res.json();
-        if (!res.ok || !Array.isArray(data)) throw new Error("Catálogo no disponible");
-        setProductos(data); setEstado("listo");
-      } catch (error) { if (error.name !== "AbortError") setEstado("error"); }
-    })();
-    return () => controller.abort();
-  }, [intento]);
-  const filtrados = productos.filter(p => (!categoriaFiltro || (p.categoria || "Sin categoría") === categoriaFiltro) && `${p.codigo} ${p.nombre}`.toLowerCase().includes(q.trim().toLowerCase()));
-  return <div className="app"><style>{STYLES}</style>
-    <main style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px", minHeight: "100vh" }}>
-      <EncabezadoPagina icon={Package} titulo="Catálogo de productos" descripcion="Taller Gregoriana" />
-      {estado === "cargando" ? <p role="status" className="paper p-6 mt-4">Cargando productos…</p> :
-        estado === "error" ? <div className="paper p-6 mt-4" role="alert"><p>No pudimos cargar el catálogo. Inténtalo nuevamente.</p><button className="btn btn-primary mt-3" onClick={() => setIntento(i => i + 1)}>Reintentar</button></div> : <>
-          <div className="section-toolbar mt-4">
-            <p className="muted">{filtrados.length} de {productos.length} productos</p>
-
-            <select className="inp" style={{ maxWidth: 280 }} aria-label="Filtrar por categoría" value={categoriaFiltro} onChange={e => setCategoriaFiltro(e.target.value)}>
-              <option value="">Todas las categorías</option>
-              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input className="inp" style={{ maxWidth: 360 }} aria-label="Buscar producto" placeholder="Buscar por nombre o código" value={q} onChange={e => setQ(e.target.value)} />
-          </div>
-          {!productos.length ? <p className="paper p-6 text-center muted">Próximamente encontrarás nuestros productos aquí.</p> :
-            !filtrados.length ? <p className="paper p-6 text-center muted">No hay productos que coincidan con tu búsqueda.</p> :
-            <div className="space-y-3">{filtrados.map(p => <FichaProducto key={p.id} p={{ ...p, precioProducto: p.precio_producto }} />)}</div>}
-        </>}
-    </main>
-  </div>;
-}
-
 export default function App() {
   return window.location.pathname.replace(/\/+$/, "") === "/catalogo" ? <CatalogoPublico /> : <AdminApp />;
 }
 
 function FichaProducto({ p, acciones, children, mostrarCategoria = true }) {
   const k = cbmCobro(p.cbm, p.peso);
+  const ficha = leerDescripcion(p.descripcion);
   return (
                 <article className="paper p-3 flex gap-3 product-card">
                   <Thumb src={p.foto} size={76} />
@@ -2324,10 +2370,11 @@ function FichaProducto({ p, acciones, children, mostrarCategoria = true }) {
                         <span className="product-model-label">Modelo</span>
                         <div className="product-model num">{p.codigo}</div>
                         <div className="font-semibold" style={{ overflowWrap: "anywhere" }}>{p.nombre}</div>
+                        {ficha.resumen && <div className="muted text-sm mt-1" style={{ overflowWrap: "anywhere" }}>{ficha.resumen}</div>}
                       </div>
                       {acciones && <div className="flex flex-shrink-0">{acciones}</div>}
                     </div>
-                    {mostrarCategoria && <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{p.categoria || "Sin categoría"}</span>}
+                    {mostrarCategoria && <span className="chip mt-2" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{[ficha.marca, p.categoria || "Sin categoría"].filter(Boolean).join(" · ")}</span>}
 
                     <div className="product-info-line mt-2">
                       <Dato label="CBM por volumen" value={`${m3(k.vol)} m³`} />
