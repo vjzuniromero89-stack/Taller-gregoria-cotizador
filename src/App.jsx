@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
-import { KG_POR_CBM, fecha, PIE_TEXTO, hojaImagen, TIEMPOS_ENTREGA } from "./hoja.js";
+import { KG_POR_CBM, fecha, PIE_TEXTO, hojaImagen, TIEMPOS_ENTREGA, DIAS_PRODUCCION, DIAS_ENVIO } from "./hoja.js";
 import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, VistaCotizacion, precioConGanancia, numeroWhatsapp } from "./Catalogo.jsx";
 import { FICHA_VACIA, armarDescripcion, leerDescripcion, cbmDeMedidas } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
@@ -54,6 +54,19 @@ const STYLES = `
 .enlaces-catalogo .cat-enlace input { flex:1 1 220px; min-width:0; background:#F6F8F9; border:1px solid #CAD4DA; border-radius:6px; padding:9px 10px; font-size:16px; color:#14222B; }
 .enlaces-catalogo .cat-btn { border-radius:6px; padding:10px 16px; font-weight:600; font-size:15px; display:inline-flex; align-items:center; gap:6px; background:#1B5E6B; color:#fff; text-decoration:none; }
 .enlaces-catalogo .cat-btn.claro { background:#fff; color:#1B5E6B; border:1px solid #CAD4DA; }
+.chip-off { background:#EEF1F3; border-color:#C3CDD3; color:#5B6B75; text-decoration:line-through; }
+.estado-caja.off { border-color:#C3CDD3; background:#F3F6F7; }
+.estado-pasos { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.pagos-caja { border:1px solid #CAD4DA; border-radius:10px; padding:12px 14px; background:#fff; }
+.pagos-resumen { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px; }
+.pagos-resumen > div { background:#F3F6F7; border-radius:8px; padding:8px 10px; min-width:0; overflow-wrap:anywhere; }
+.pagos-resumen .saldo { background:#FFF4CC; box-shadow:inset 0 0 0 2px #F2B705; }
+.pagos-resumen .saldo.cero { background:#DDF3E6; box-shadow:inset 0 0 0 2px #8FCFAA; }
+.pagos-form { display:grid; grid-template-columns:140px 1fr auto; gap:8px; margin-top:10px; align-items:end; }
+@media (max-width:640px) { .pagos-form { grid-template-columns:1fr; } .pagos-resumen { grid-template-columns:1fr; } }
+.resumen-ganancia { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+.resumen-ganancia > div { background:#fff; border:1px solid #CAD4DA; border-radius:12px; padding:14px 16px; }
+.resumen-ganancia b { display:block; font-family:'Barlow Condensed',sans-serif; font-size:30px; line-height:1.1; }
 .chip-ok { background:#DDF3E6; border-color:#8FCFAA; color:#14603A; }
 .chip-info { background:#E4EFF1; border-color:#91B4BC; color:#134650; }
 .filtro-estado { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
@@ -487,11 +500,29 @@ function fileToDataUrl(file) {
 async function miniatura(p) {
   try { return p.foto ? await resizeSrc(p.foto, 120, 0.7) : ""; } catch (e) { return ""; }
 }
-// Una cotización de cliente está pendiente hasta que el cliente la confirma.
-const estadoDe = (c) => (c?.totales?.estado === "confirmada" ? "confirmada" : "pendiente");
-const ChipEstado = ({ c }) => estadoDe(c) === "confirmada"
-  ? <span className="chip chip-ok">Confirmada</span>
-  : <span className="chip">Pendiente</span>;
+// Estados de una cotización de cliente, en el orden en que avanza un pedido.
+const ESTADOS = [
+  ["pendiente", "Pendiente", ""],
+  ["confirmada", "Confirmada", "chip-ok"],
+  ["produccion", "En producción", "chip-info"],
+  ["camino", "En camino", "chip-info"],
+  ["entregada", "Entregada", "chip-ok"],
+  ["cancelada", "Cancelada", "chip-off"],
+];
+const SIGUIENTE_ESTADO = { pendiente: "confirmada", confirmada: "produccion", produccion: "camino", camino: "entregada" };
+const estadoDe = (c) => (ESTADOS.some((e) => e[0] === c?.totales?.estado) ? c.totales.estado : "pendiente");
+const nombreEstado = (estado) => ESTADOS.find((e) => e[0] === estado)[1];
+// Vendida: el cliente ya la confirmó (aunque siga en producción o en camino). Solo estas cuentan como ganancia.
+const esVendida = (c) => ["confirmada", "produccion", "camino", "entregada"].includes(estadoDe(c));
+const ChipEstado = ({ estado }) => <span className={`chip ${ESTADOS.find((e) => e[0] === estado)[2]}`}>{nombreEstado(estado)}</span>;
+
+const totalDeCliente = (c) => c.totalFinal ?? totalConDescuento(c, calcTotalesCliente(c.lineas).totalVenta);
+const gananciaDeCliente = (c) => totalDeCliente(c) - calcTotalesCliente(c.lineas).totalCosto;
+const pagadoDe = (c) => (c?.totales?.pagos || []).reduce((suma, p) => suma + num(p.monto), 0);
+const soloFecha = (d) => new Date(d).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" });
+// Entrega estimada: la fecha de confirmación más los días de producción y de envío.
+const entregaEstimada = (c) => (c?.totales?.confirmadaEl
+  ? new Date(new Date(c.totales.confirmadaEl).getTime() + (DIAS_PRODUCCION + DIAS_ENVIO) * 86400000) : null);
 
 const siguienteNumero = (prefijo, contador) => `${prefijo}-${String(contador).padStart(4, "0")}`;
 
@@ -1017,17 +1048,17 @@ function EliminarRegistro({ numero, onDelete }) {
 }
 
 function ListaRegistradas({
-  lista, onOpen, totalDe, gananciaDe, titulo = "Registradas", conDescuento = false, conEstado = false,
+  lista, onOpen, totalDe, gananciaDe, titulo = "Registradas", conDescuento = false, conEstado = false, estadoFila = estadoDe, notaDe,
   vacio = "Las cotizaciones que registres quedan guardadas aquí.",
 }) {
   const [q, setQ] = useState("");
   const [estado, setEstado] = useState("");
   const filtradas = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return lista.filter((c) => (!estado || estadoDe(c) === estado) &&
+    return lista.filter((c) => (!estado || estadoFila(c) === estado) &&
       (!s || c.numero.toLowerCase().includes(s) || (c.cliente || "").toLowerCase().includes(s)));
   }, [lista, q, estado]);
-  const cuantas = (e) => lista.filter((c) => estadoDe(c) === e).length;
+  const cuantas = (e) => lista.filter((c) => estadoFila(c) === e).length;
 
   return (
     <section>
@@ -1043,7 +1074,7 @@ function ListaRegistradas({
       </div>
       {conEstado && lista.length > 0 && (
         <div className="filtro-estado" role="group" aria-label="Filtrar por estado">
-          {[["", "Todas", lista.length], ["pendiente", "Pendientes", cuantas("pendiente")], ["confirmada", "Confirmadas", cuantas("confirmada")]].map(([valor, nombre, n]) => (
+          {[["", "Todas", lista.length], ...ESTADOS.map(([valor, nombre]) => [valor, nombre, cuantas(valor)]).filter((e) => e[2] > 0)].map(([valor, nombre, n]) => (
             <button key={valor} type="button" aria-pressed={estado === valor} onClick={() => setEstado(valor)}>{nombre} ({n})</button>
           ))}
         </div>
@@ -1063,7 +1094,7 @@ function ListaRegistradas({
                 <div className="flex justify-between gap-2">
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="font-semibold num">{c.numero}</span>
-                    {conEstado && <ChipEstado c={c} />}
+                    {conEstado && <ChipEstado estado={estadoFila(c)} />}
                     {c.totales?.contacto?.origen === "catalogo" && <span className="chip chip-info">Del catálogo</span>}
                     {conDescuento && num(c.descuento) > 0 && (
                       <span className="chip num">{m3(num(c.descuento))}% desc.</span>
@@ -1078,6 +1109,7 @@ function ListaRegistradas({
                         Ganancia: {money(gananciaDe(c))}
                       </div>
                     )}
+                    {notaDe && notaDe(c) && <div className="num muted" style={{ fontSize: 13, marginTop: 4 }}>{notaDe(c)}</div>}
                   </div>
                 </div>
                 <div className="flex justify-between gap-2 text-sm muted">
@@ -1585,6 +1617,12 @@ function CotizacionInternaView({ cotiz, guardarCotizaciones, clientes, avisar, e
     [cotiz.lista, clientes.lista]
   );
 
+  const deCliente = (c) => clientes.lista.find((x) => x.numero === c.numero);
+  // Misma cuenta que cada fila de esta lista: venta menos costo con comisión.
+  const gananciaPor = (vendidas) => cotiz.lista
+    .filter((c) => (c.deCliente || c.origen) && (vendidas ? esVendida(deCliente(c)) : estadoDe(deCliente(c)) === "pendiente"))
+    .reduce((suma, c) => { const t = calcTotales(c.lineas); return suma + t.totalVenta - t.general; }, 0);
+
   async function limpiar() {
     const quedan = cotiz.lista.filter((c) => clientes.lista.some((x) => x.numero === c.numero));
     const ok = await guardarCotizaciones({ ...cotiz, lista: quedan });
@@ -1607,9 +1645,24 @@ function CotizacionInternaView({ cotiz, guardarCotizaciones, clientes, avisar, e
       <EncabezadoPagina icon={FileTextIcon} titulo="Cotizaciones internas"
         descripcion="Consulta costos, cargos y ganancias. Los descuentos se muestran solo como referencia visual." />
 
+      <div className="resumen-ganancia">
+        <div>
+          <span className="lbl">Ganancia confirmada</span>
+          <b className="num pos">{money(gananciaPor(true))}</b>
+          <span className="text-sm muted">De cotizaciones que el cliente ya confirmó.</span>
+        </div>
+        <div>
+          <span className="lbl">Por confirmar</span>
+          <b className="num muted">{money(gananciaPor(false))}</b>
+          <span className="text-sm muted">De cotizaciones pendientes. Las canceladas no cuentan.</span>
+        </div>
+      </div>
+
       <ListaRegistradas
         lista={cotiz.lista}
         onOpen={setDetalle}
+        conEstado
+        estadoFila={(c) => estadoDe(deCliente(c))}
         totalDe={(c) => calcTotales(c.lineas).general}
         gananciaDe={(c) => {
           if (!(c.deCliente || c.origen)) return null;
@@ -1678,13 +1731,44 @@ function LineaClienteCard({ l, onChange, onRemove }) {
   );
 }
 
-function DetalleCliente({ cot, onClose, onDelete, onEstado, empresa, avisar }) {
-  const confirmada = estadoDe(cot) === "confirmada";
-  const [cambiando, setCambiando] = useState(false);
-  const alternarEstado = async () => {
-    setCambiando(true);
-    await onEstado(cot.id, confirmada ? "pendiente" : "confirmada");
-    setCambiando(false);
+function DetalleCliente({ cot, onClose, onDelete, onActualizar, onEditar, empresa, avisar }) {
+  const estado = estadoDe(cot);
+  const vendida = esVendida(cot);
+  const [ocupado, setOcupado] = useState(false);
+  const [pago, setPago] = useState({ monto: "", nota: "" });
+  const pagos = cot.totales?.pagos || [];
+  const pagado = pagadoDe(cot);
+  const entrega = entregaEstimada(cot);
+  const telefonoCliente = cot.totales?.contacto?.telefono || "";
+
+  const ponerEstado = async (nuevo) => {
+    if (nuevo === estado) return;
+    setOcupado(true);
+    await onActualizar(cot.id, (tt) => {
+      const ahora = new Date().toISOString();
+      tt.estado = nuevo;
+      if (nuevo === "pendiente") delete tt.confirmadaEl;
+      else if (nuevo !== "cancelada" && !tt.confirmadaEl) tt.confirmadaEl = ahora;
+      if (nuevo === "entregada") tt.entregadaEl = ahora; else delete tt.entregadaEl;
+      return tt;
+    }, `${cot.numero}: ${nombreEstado(nuevo).toLowerCase()}`);
+    setOcupado(false);
+  };
+  const registrarPago = async () => {
+    const monto = num(pago.monto);
+    if (monto <= 0) return;
+    setOcupado(true);
+    const ok = await onActualizar(cot.id, (tt) => {
+      tt.pagos = [...(tt.pagos || []), { id: uid(), fecha: new Date().toISOString(), monto, nota: pago.nota.trim() }];
+      return tt;
+    }, `Pago de ${money(monto)} registrado`);
+    if (ok) setPago({ monto: "", nota: "" });
+    setOcupado(false);
+  };
+  const quitarPago = async (id) => {
+    setOcupado(true);
+    await onActualizar(cot.id, (tt) => { tt.pagos = (tt.pagos || []).filter((p) => p.id !== id); return tt; }, "Pago quitado");
+    setOcupado(false);
   };
   const t = useMemo(() => calcTotalesCliente(cot.lineas), [cot]);
   const porcentaje = Math.min(100, Math.max(0, num(cot.descuento)));
@@ -1719,9 +1803,29 @@ function DetalleCliente({ cot, onClose, onDelete, onEstado, empresa, avisar }) {
       ["Subtotal", money(t.totalVenta)],
     ];
     if (porcentaje > 0) totales.push([`Descuento (${m3(porcentaje)}%)`, `− ${money(montoDescuento)}`]);
+    if (pagado > 0) totales.push(["Pagado", money(pagado)], ["Saldo", money(Math.max(0, totalFinal - pagado))]);
     totales.push(...TIEMPOS_ENTREGA);
+    if (vendida && estado !== "entregada" && entrega) totales.push(["Entrega estimada", soloFecha(entrega)]);
 
     return { empresa, cot, columnas, filas, totales, total: money(totalFinal), totalLabel: "Total con descuento" };
+  };
+
+  const avisoParaCliente = () => {
+    const saludo = `Hola${cot.cliente ? ` ${cot.cliente}` : ""}, le escribimos de ${empresa.nombre || "Taller Gregoriana"}.`;
+    const cuerpo = {
+      confirmada: `Su cotización ${cot.numero} fue confirmada.`,
+      produccion: `Su pedido ${cot.numero} ya está en producción.`,
+      camino: `Su pedido ${cot.numero} ya va en camino.`,
+      entregada: `Su pedido ${cot.numero} fue entregado. Gracias por su compra.`,
+    }[estado];
+    const lineas = [saludo, cuerpo, "", `Total: ${money(totalFinal)}`];
+    if (pagado > 0) lineas.push(`Pagado: ${money(pagado)}`, `Saldo: ${money(Math.max(0, totalFinal - pagado))}`);
+    if (estado !== "entregada") {
+      lineas.push(`Tiempo de producción: ${DIAS_PRODUCCION} días`, `Tiempo de envío: ${DIAS_ENVIO} días`);
+      if (entrega) lineas.push(`Entrega estimada: ${soloFecha(entrega)}`);
+    }
+    if (cot.totales?.contacto?.origen === "catalogo") lineas.push("", "Su cotización:", `${window.location.origin}/cotizacion/${cot.id}`);
+    return lineas.join("\n");
   };
 
   const imprimir = () => imprimirHoja(hojaHTML(datos()));
@@ -1732,24 +1836,82 @@ function DetalleCliente({ cot, onClose, onDelete, onEstado, empresa, avisar }) {
 
   return (
     <ModalShell titulo={cot.numero} subtitulo={`${cot.cliente || "Sin cliente"}, ${fecha(cot.fecha)}`} onClose={onClose}>
-      {onEstado && (
-        <div className={`estado-caja ${confirmada ? "ok" : ""}`}>
-          <div>
-            <div className="font-semibold">{confirmada ? "Confirmada por el cliente" : "Pendiente de confirmar"}</div>
-            <div className="text-sm muted">
-              {confirmada
-                ? (cot.totales?.confirmadaEl ? `Confirmada el ${fecha(cot.totales.confirmadaEl)}` : "El cliente aceptó esta cotización.")
-                : "Márcala como confirmada cuando el cliente la acepte."}
-            </div>
+      <div className={`estado-caja ${vendida ? "ok" : estado === "cancelada" ? "off" : ""}`}>
+        <div>
+          <div className="font-semibold flex items-center gap-2">Estado: <ChipEstado estado={estado} /></div>
+          <div className="text-sm muted mt-1">
+            {estado === "pendiente" && "Márcala como confirmada cuando el cliente la acepte."}
+            {estado === "cancelada" && "El cliente no la aceptó. No cuenta como ganancia."}
+            {vendida && cot.totales?.confirmadaEl && `Confirmada el ${soloFecha(cot.totales.confirmadaEl)}. `}
+            {vendida && estado !== "entregada" && entrega && `Entrega estimada: ${soloFecha(entrega)}.`}
+            {estado === "entregada" && cot.totales?.entregadaEl && `Entregada el ${soloFecha(cot.totales.entregadaEl)}.`}
           </div>
-          <button className={confirmada ? "btn btn-ghost" : "btn btn-primary"} onClick={alternarEstado} disabled={cambiando}>
-            {cambiando ? "Guardando…" : confirmada ? "Volver a pendiente" : "Marcar como confirmada"}
-          </button>
+        </div>
+        <div className="estado-pasos">
+          {SIGUIENTE_ESTADO[estado] && (
+            <button className="btn btn-primary" onClick={() => ponerEstado(SIGUIENTE_ESTADO[estado])} disabled={ocupado}>
+              {estado === "pendiente" ? "Marcar como confirmada" : `Pasar a: ${nombreEstado(SIGUIENTE_ESTADO[estado])}`}
+            </button>
+          )}
+          <select className="inp" style={{ width: "auto" }} aria-label="Cambiar estado" value={estado} disabled={ocupado}
+            onChange={(e) => ponerEstado(e.target.value)}>
+            {ESTADOS.map(([valor, nombre]) => <option key={valor} value={valor}>{nombre}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {estado === "pendiente" && onEditar && (
+        <button className="btn btn-ghost w-full" onClick={() => onEditar(cot)}><Pencil size={16} />Editar precios, cantidades o descuento</button>
+      )}
+
+      {estado !== "cancelada" && (
+        <div className="pagos-caja">
+          <div className="font-semibold">Anticipo y saldo</div>
+          <div className="pagos-resumen">
+            <div><span className="lbl">Total</span><b className="num">{money(totalFinal)}</b></div>
+            <div><span className="lbl">Pagado</span><b className="num">{money(pagado)}</b></div>
+            <div className={`saldo ${totalFinal - pagado <= 0 ? "cero" : ""}`}><span className="lbl">Saldo</span><b className="num">{money(Math.max(0, totalFinal - pagado))}</b></div>
+          </div>
+          {pagos.length > 0 && (
+            <ul className="mt-2" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {pagos.map((p) => (
+                <li key={p.id} className="flex items-center gap-2 text-sm row-line" style={{ padding: "6px 0" }}>
+                  <span className="num font-semibold">{money(p.monto)}</span>
+                  <span className="muted flex-1" style={{ overflowWrap: "anywhere" }}>{soloFecha(p.fecha)}{p.nota ? ` · ${p.nota}` : ""}</span>
+                  <button className="icon-btn" onClick={() => quitarPago(p.id)} disabled={ocupado} aria-label={`Quitar pago de ${money(p.monto)}`}><Trash2 size={15} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="pagos-form">
+            <div>
+              <label className="lbl" htmlFor="pago-monto">Monto recibido</label>
+              <input id="pago-monto" className="inp num" inputMode="decimal" placeholder="0.00" value={pago.monto}
+                onChange={(e) => setPago((v) => ({ ...v, monto: e.target.value }))} />
+            </div>
+            <div>
+              <label className="lbl" htmlFor="pago-nota">Nota (opcional)</label>
+              <input id="pago-nota" className="inp" placeholder="Anticipo, transferencia, efectivo" value={pago.nota}
+                onChange={(e) => setPago((v) => ({ ...v, nota: e.target.value }))} />
+            </div>
+            <button className="btn btn-primary" onClick={registrarPago} disabled={ocupado || num(pago.monto) <= 0}>Registrar pago</button>
+          </div>
         </div>
       )}
-      {cot.totales?.contacto?.origen === "catalogo" && (
+
+      {vendida && (
+        <a className="btn btn-primary w-full" style={{ textDecoration: "none", background: "#128C4A" }} target="_blank" rel="noopener noreferrer"
+          href={`https://wa.me/${numeroWhatsapp(telefonoCliente)}?text=${encodeURIComponent(avisoParaCliente())}`}>
+          <Share2 size={16} />Avisar al cliente por WhatsApp: {nombreEstado(estado).toLowerCase()}
+        </a>
+      )}
+      {vendida && !numeroWhatsapp(telefonoCliente) && (
+        <p className="text-sm muted" style={{ marginTop: -6 }}>Esta cotización no tiene teléfono del cliente: WhatsApp te pedirá elegir el contacto.</p>
+      )}
+
+      {cot.totales?.contacto && (
         <div className="paper p-3" style={{ background: "#F3F6F7", borderColor: "#CAD4DA" }}>
-          <div className="font-semibold">Enviada por el cliente desde el catálogo</div>
+          <div className="font-semibold">{cot.totales.contacto.origen === "catalogo" ? "Enviada por el cliente desde el catálogo" : "Datos del cliente"}</div>
           <div className="text-sm mt-1 num">Teléfono: {cot.totales.contacto.telefono || "sin teléfono"}</div>
           {cot.totales.contacto.nota && <div className="text-sm mt-1" style={{ overflowWrap: "anywhere" }}>Nota: {cot.totales.contacto.nota}</div>}
           {numeroWhatsapp(cot.totales.contacto.telefono) && (
@@ -1783,6 +1945,23 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [descuento, setDescuento] = useState("0");
+  const [telefono, setTelefono] = useState("");
+  const [editId, setEditId] = useState(null);
+  const enEdicion = editId ? cotiz.lista.find((c) => c.id === editId) : null;
+
+  const limpiarFormulario = () => { setEditId(null); setLineas([]); setCliente(""); setTelefono(""); setDescuento("0"); setError(""); };
+  function editar(c) {
+    setEditId(c.id); setCliente(c.cliente || ""); setTelefono(c.totales?.contacto?.telefono || ""); setDescuento(String(c.descuento || 0));
+    setLineas(c.lineas.map((l) => ({ ...l, cantidad: String(l.cantidad), precioVenta: num(l.precioVenta) > 0 ? String(l.precioVenta) : "" })));
+    setDetalle(null); setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  // Copia con costos para "Cotizaciones internas".
+  const copiaInterna = (c) => ({
+    id: uid(), numero: c.numero, fecha: c.fecha, cliente: c.cliente, deCliente: true,
+    descuento: c.descuento || 0, descuentoMonto: c.descuentoMonto || 0, totalFinal: totalDeCliente(c),
+    lineas: c.lineas.map((l) => ({ ...l, id: uid() })), totales: calcTotales(c.lineas),
+  });
 
   const t = useMemo(() => calcTotalesCliente(lineas), [lineas]);
   const porcentaje = Math.min(100, Math.max(0, num(descuento)));
@@ -1810,12 +1989,30 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
       ...l, cantidad: num(l.cantidad), precioCbm: num(l.precioCbm), precioVenta: num(l.precioVenta),
     }));
     const ahora = new Date().toISOString();
+    const tel = telefono.trim();
+
+    if (enEdicion) {
+      const totales = { ...enEdicion.totales, ...calcTotalesCliente(lineasFinal), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal };
+      if (tel || enEdicion.totales?.contacto) totales.contacto = { origen: "app", ...enEdicion.totales?.contacto, telefono: tel };
+      const nueva = { ...enEdicion, cliente: cliente.trim(), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal, lineas: lineasFinal, totales };
+      setGuardando(true);
+      const guardada = await guardarCotizaciones({ ...cotiz, lista: cotiz.lista.map((c) => (c.id === nueva.id ? nueva : c)) });
+      if (guardada && internas.lista.some((c) => c.numero === nueva.numero)) {
+        await guardarInternas({ ...internas, lista: internas.lista.map((c) => (c.numero === nueva.numero ? { ...copiaInterna(nueva), id: c.id } : c)) });
+      }
+      setGuardando(false);
+      if (guardada) { avisar(`${nueva.numero} actualizada`); limpiarFormulario(); }
+      return;
+    }
 
     const registro = {
       id: uid(), numero, fecha: ahora, cliente: cliente.trim(),
       descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal,
       lineas: lineasFinal,
-      totales: { ...calcTotalesCliente(lineasFinal), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal },
+      totales: {
+        ...calcTotalesCliente(lineasFinal), descuento: porcentaje, descuentoMonto: montoDescuento, totalFinal,
+        ...(tel ? { contacto: { telefono: tel, origen: "app" } } : {}),
+      },
     };
 
     setGuardando(true);
@@ -1833,23 +2030,29 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     setGuardando(false);
     if (ok) {
       avisar(copiada ? `${numero} registrada, también en las internas` : `Cotización ${numero} registrada`);
-      setLineas([]); setCliente(""); setDescuento("0"); setError("");
+      limpiarFormulario();
     }
   }
 
-  async function cambiarEstado(id, estado) {
+  // Cambia datos de una cotización guardada (estado, pagos). Al confirmarse, deja su copia en las internas.
+  async function actualizar(id, mutar, mensaje) {
     const actual = cotiz.lista.find((c) => c.id === id);
-    if (!actual) return;
-    const totales = { ...actual.totales, estado };
-    if (estado === "confirmada") totales.confirmadaEl = new Date().toISOString(); else delete totales.confirmadaEl;
-    const nueva = { ...actual, totales };
+    if (!actual) return false;
+    const nueva = { ...actual, totales: mutar({ ...actual.totales }) };
     const ok = await guardarCotizaciones({ ...cotiz, lista: cotiz.lista.map((c) => (c.id === id ? nueva : c)) });
-    if (ok) { setDetalle(nueva); avisar(estado === "confirmada" ? `${nueva.numero} marcada como confirmada` : `${nueva.numero} volvió a pendiente`); }
+    if (!ok) return false;
+    setDetalle(nueva);
+    if (mensaje) avisar(mensaje);
+    if (esVendida(nueva) && !internas.lista.some((c) => c.numero === nueva.numero)) {
+      await guardarInternas({ ...internas, lista: [copiaInterna(nueva), ...internas.lista] });
+    }
+    return true;
   }
 
   async function eliminar(id) {
     const cot = cotiz.lista.find((c) => c.id === id);
     const ok = await guardarCotizaciones({ ...cotiz, lista: cotiz.lista.filter((c) => c.id !== id) });
+    if (id === editId) limpiarFormulario();
     if (ok && cot) {
       const quedan = internas.lista.filter((c) => c.numero !== cot.numero);
       if (quedan.length !== internas.lista.length) await guardarInternas({ ...internas, lista: quedan });
@@ -1863,13 +2066,20 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
       <EncabezadoPagina icon={Users} titulo="Cotizaciones clientes"
         descripcion="Prepara cotizaciones, aplica descuentos y comparte documentos profesionales con tus clientes." />
       <section className="paper p-4">
-        <h2 className="cond text-2xl font-semibold mb-3">Nueva cotización para cliente</h2>
+        <h2 className="cond text-2xl font-semibold mb-3">{enEdicion ? `Editar cotización ${enEdicion.numero}` : "Nueva cotización para cliente"}</h2>
         {productos.length === 0 ? <SinProductos irAProductos={irAProductos} /> : (
           <>
-            <div className="mb-3">
-              <label className="lbl" htmlFor="cc-cliente">Cliente</label>
-              <input id="cc-cliente" className="inp" placeholder="Nombre del cliente"
-                value={cliente} onChange={(e) => setCliente(e.target.value)} />
+            <div className="form-grid-2 mb-3">
+              <div>
+                <label className="lbl" htmlFor="cc-cliente">Cliente</label>
+                <input id="cc-cliente" className="inp" placeholder="Nombre del cliente"
+                  value={cliente} onChange={(e) => setCliente(e.target.value)} />
+              </div>
+              <div>
+                <label className="lbl" htmlFor="cc-telefono">Teléfono o WhatsApp del cliente (opcional)</label>
+                <input id="cc-telefono" className="inp num" inputMode="tel" placeholder="8888 8888"
+                  value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+              </div>
             </div>
 
             {lineas.length === 0 && <SelectorProducto productos={productos} onAgregar={agregar} />}
@@ -1914,8 +2124,9 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
 
                 <button className="btn btn-primary w-full" style={{ padding: "13px 16px", fontSize: 16 }}
                   onClick={registrar} disabled={guardando}>
-                  {guardando ? "Registrando…" : "Registrar cotización"}
+                  {guardando ? "Guardando…" : enEdicion ? `Guardar cambios de ${enEdicion.numero}` : "Registrar cotización"}
                 </button>
+                {enEdicion && <button className="btn btn-ghost w-full" onClick={limpiarFormulario} disabled={guardando}>Cancelar edición</button>}
               </div>
             )}
           </>
@@ -1927,10 +2138,11 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
         onOpen={setDetalle}
         totalDe={(c) => c.totalFinal ?? c.totales.totalFinal ?? c.totales.totalVenta}
         conEstado
+        notaDe={(c) => (esVendida(c) ? (totalDeCliente(c) - pagadoDe(c) > 0 ? `Saldo: ${money(totalDeCliente(c) - pagadoDe(c))}` : "Pagada") : null)}
       />
 
       {detalle && (
-        <DetalleCliente cot={detalle} onClose={() => setDetalle(null)} onDelete={eliminar} onEstado={cambiarEstado}
+        <DetalleCliente cot={detalle} onClose={() => setDetalle(null)} onDelete={eliminar} onActualizar={actualizar} onEditar={editar}
           empresa={empresa} avisar={avisar} />
       )}
     </div>
@@ -1944,13 +2156,11 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
   const totalInternas = internas.lista.length;
   const totalClientes = clientes.lista.length;
 
-  const gananciaTotal = useMemo(() => {
-    return clientes.lista.reduce((sum, c) => {
-      const t = calcTotalesCliente(c.lineas);
-      const venta = c.totalFinal ?? totalConDescuento(c, t.totalVenta);
-      return sum + (venta - t.totalCosto);
-    }, 0);
-  }, [clientes.lista]);
+  const gananciaTotal = useMemo(() => clientes.lista.filter(esVendida).reduce((s, c) => s + gananciaDeCliente(c), 0), [clientes.lista]);
+  const gananciaPendiente = useMemo(
+    () => clientes.lista.filter((c) => estadoDe(c) === "pendiente").reduce((s, c) => s + gananciaDeCliente(c), 0), [clientes.lista]);
+  const porCobrar = useMemo(
+    () => clientes.lista.filter(esVendida).reduce((s, c) => s + Math.max(0, totalDeCliente(c) - pagadoDe(c)), 0), [clientes.lista]);
 
   const recientes = useMemo(() => {
     return [...clientes.lista].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 5);
@@ -1960,7 +2170,8 @@ function InicioView({ productos, internas, clientes, empresa, irA }) {
     { label: "Productos", value: totalProductos, sub: "en catálogo", color: "#1B5E6B", bg: "#E4EFF1", icon: Package },
     { label: "Cotizaciones internas", value: totalInternas, sub: "registradas", color: "#7A5A00", bg: "#FFF4CC", icon: FileTextIcon },
     { label: "Cotizaciones clientes", value: totalClientes, sub: "registradas", color: "#7A2D1B", bg: "#F6DDD6", icon: Users },
-    { label: "Ganancia total", value: money(gananciaTotal), sub: "acumulada", color: "#155F3D", bg: "#D7EFE2", icon: TrendingUp },
+    { label: "Ganancia confirmada", value: money(gananciaTotal), sub: `por confirmar: ${money(gananciaPendiente)}`, color: "#155F3D", bg: "#D7EFE2", icon: TrendingUp },
+    { label: "Por cobrar", value: money(porCobrar), sub: "saldo de cotizaciones confirmadas", color: "#7A5A00", bg: "#FFF4CC", icon: DollarSign },
   ];
 
   return (
