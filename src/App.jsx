@@ -278,11 +278,20 @@ const kg = (n) => (n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })
 const KG_POR_CBM = 350;
 const COMISION = 0.03;
 
-const cbmCobro = (cbm, peso) => {
+// El transporte cobra como mínimo 1 CBM por cada máquina, aunque mida o pese menos.
+const MINIMO_CBM = 1;
+
+const cbmCobro = (cbm, peso, minimo = MINIMO_CBM) => {
   const vol = num(cbm);
   const porPeso = num(peso) / KG_POR_CBM;
-  return { vol, porPeso, cobrable: Math.max(vol, porPeso), por: porPeso > vol ? "peso" : "volumen" };
+  const real = Math.max(vol, porPeso);
+  return {
+    vol, porPeso, cobrable: Math.max(real, minimo),
+    por: minimo > real ? `mínimo de ${minimo} CBM` : porPeso > vol ? "peso" : "volumen",
+  };
 };
+// Las cotizaciones guardadas antes de aplicar el mínimo conservan su cálculo original.
+const minimoDeLinea = (l) => num(l.minimoCbm);
 
 const fecha = (iso) => {
   const d = new Date(iso);
@@ -473,7 +482,7 @@ const siguienteNumero = (prefijo, contador) => `${prefijo}-${String(contador).pa
 
 const calcLinea = (l) => {
   const cant = num(l.cantidad);
-  const k = cbmCobro(l.cbm, l.peso);
+  const k = cbmCobro(l.cbm, l.peso, minimoDeLinea(l));
   const totalCbm = k.cobrable * cant;
   const totalPeso = num(l.peso) * cant;
   const totalProducto = num(l.precioProducto) * cant;
@@ -499,7 +508,7 @@ const calcTotales = (lineas) => {
 
 const calcCliente = (l) => {
   const cant = num(l.cantidad);
-  const k = cbmCobro(l.cbm, l.peso);
+  const k = cbmCobro(l.cbm, l.peso, minimoDeLinea(l));
   const totalCbm = k.cobrable * cant;
   const totalPeso = num(l.peso) * cant;
   const totalFlete = totalCbm * num(l.precioCbm);
@@ -1783,7 +1792,7 @@ function LineaClienteCard({ l, onChange, onRemove }) {
           <input className="inp inp-venta num" inputMode="decimal" placeholder="0.00" value={l.precioVenta} onChange={set("precioVenta")} />
         </div>
       </div>
-      {num(l.peso) > 0 && <div className="mt-3"><ComparaCbm k={c.k} cant={num(l.cantidad)} /></div>}
+      {(num(l.peso) > 0 || c.k.cobrable > c.k.vol) && <div className="mt-3"><ComparaCbm k={c.k} cant={num(l.cantidad)} /></div>}
       <div className="grid grid-cols-2 gap-2 mt-3 p-3" style={{ background: "#F3F6F7", borderRadius: 6 }}>
         <Dato label="Total CBM a cobrar" value={m3(c.totalCbm)} />
         <Dato label="Total venta" value={tienePrecio ? money(c.totalVenta) : "Sin precio"} strong={tienePrecio}
@@ -1874,7 +1883,7 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     setError("");
     const foto = await miniatura(p);
     setLineas((ls) => [...ls, {
-      id: uid(), productId: p.id, codigo: p.codigo, nombre: p.nombre, foto, cbm: p.cbm, peso: p.peso || 0,
+      id: uid(), productId: p.id, codigo: p.codigo, nombre: p.nombre, foto, cbm: p.cbm, peso: p.peso || 0, minimoCbm: MINIMO_CBM,
       precioCbm: p.precioCbm, precioProducto: p.precioProducto,
       cantidad: String(cant), precioVenta: p.precioVenta ? String(p.precioVenta) : "",
     }]);

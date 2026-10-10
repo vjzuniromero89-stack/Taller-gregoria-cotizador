@@ -5,6 +5,7 @@ import { leerDescripcion } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
 const KG_POR_CBM = 350;
+const MINIMO_CBM = 1; // el transporte cobra como mínimo 1 CBM por cada máquina
 const dinero = (n) => "US$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const m3 = (n) => (n || 0).toLocaleString("en-US", { maximumFractionDigits: 3 }) + " m³";
 const kilos = (n) => (n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " kg";
@@ -194,13 +195,14 @@ export const precioConGanancia = (costo, porcentaje) => redondo(costo * (1 + por
 const normalizar = (p) => {
   const cbm = Number(p.cbm) || 0, peso = Number(p.peso) || 0;
   const porPeso = peso / KG_POR_CBM;
-  const cobrable = Math.max(cbm, porPeso);
+  const real = Math.max(cbm, porPeso);
+  const cobrable = Math.max(real, MINIMO_CBM);
   const producto = Number(p.precio_producto ?? p.precioProducto) || 0;
   const precioCbm = Number(p.precio_cbm ?? p.precioCbm) || 0;
   const flete = cobrable * precioCbm;
   return {
     id: p.id, codigo: p.codigo || "", nombre: p.nombre || "", categoria: p.categoria || "Sin categoría",
-    cbm, peso, porPeso, cobrable, por: porPeso > cbm ? "peso" : "volumen",
+    cbm, peso, porPeso, cobrable, por: MINIMO_CBM > real ? `mínimo de ${MINIMO_CBM} CBM` : porPeso > cbm ? "peso" : "volumen",
     producto, precioCbm, flete, costo: producto + flete, venta: Number(p.precio_venta ?? p.precioVenta) || 0,
     foto: p.foto || "", ficha: leerDescripcion(p.descripcion),
   };
@@ -234,7 +236,7 @@ function EditorPrecio({ p, guardar }) {
     <div className="cat-editor">
       <div className="cat-costo cat-num">
         <span>Costo <b>{dinero(p.costo)}</b></span>
-        <small>{p.flete > 0 ? `producto ${dinero(p.producto)} + flete ${dinero(p.flete)}` : "sin flete: falta el CBM o el precio CBM"}</small>
+        <small>{p.flete > 0 ? `producto ${dinero(p.producto)} + flete ${dinero(p.flete)}` : "sin flete: falta el precio CBM"}</small>
       </div>
       <div className="cat-porcentajes" role="group" aria-label={`Ganancia de ${p.codigo}`}>
         {PORCENTAJES.map((n) => (
