@@ -815,8 +815,13 @@ function CotizacionLista({ cot, empresa, alTerminar }) {
   );
 }
 
-function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar, token }) {
-  const [datos, setDatos] = useState(() => ({ nombre: "", telefono: "", direccion: "", ...leerGuardado(`${CLAVE_PEDIDO}-datos`, {}) }));
+function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar, token, nombre: nombreCuenta }) {
+  // Solo dentro de la cuenta de un cliente se recuerdan sus datos; el catálogo general siempre abre en blanco.
+  const recordar = Boolean(token);
+  const [datos, setDatos] = useState(() => ({
+    nombre: "", telefono: "", direccion: "", ...(recordar ? leerGuardado(`${CLAVE_PEDIDO}-datos-${token}`, {}) : {}),
+    ...(nombreCuenta ? { nombre: nombreCuenta } : {}),
+  }));
   const [nota, setNota] = useState("");
   const [error, setError] = useState("");
   const [trabajando, setTrabajando] = useState(false);
@@ -840,7 +845,7 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar, token }) {
     if (!nombre) { setError("Escribe tu nombre."); return; }
     if (telefono.replace(/\D/g, "").length < 8) { setError("Escribe tu número de teléfono completo."); return; }
     setError(""); setTrabajando(true);
-    guardarLocal(`${CLAVE_PEDIDO}-datos`, { nombre, telefono, direccion });
+    if (recordar) guardarLocal(`${CLAVE_PEDIDO}-datos-${token}`, { nombre, telefono, direccion });
     try {
       const res = await fetch("/api/solicitudes", {
         method: "POST", headers: { "content-type": "application/json" },
@@ -1113,12 +1118,12 @@ export function VistaCliente({ token }) {
       </>}
     </section>
   );
-  return <Catalogo modo="cliente" cuenta={{ token, titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, contenido: arriba, cantidad: lista.length }} />;
+  return <Catalogo modo="cliente" cuenta={{ token, nombre: datos?.nombre || "", titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, contenido: arriba, cantidad: lista.length }} />;
 }
 
 const RUTAS = { cliente: "/catalogo", interno: "/catalogo-interno" };
 const API = { cliente: "/api/catalogo", interno: "/api/catalogo-interno" };
-const TITULOS = { cliente: "Catálogo para clientes", interno: "Catálogo interno" };
+const TITULOS = { cliente: "Catálogo cliente", interno: "Catálogo interno" };
 
 /**
  * modo "cliente": precio de venta, sin costos. modo "interno": precio de costo, flete y CBM.
@@ -1177,7 +1182,8 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
 
   const seleccionado = abierto ? productos.find((p) => p.codigo.toLowerCase() === abierto.toLowerCase()) : null;
   const sinPrecio = productos.filter((p) => p.venta <= 0).length;
-  const miEnlace = !dentro && modo === "cliente" && !cuenta ? leerGuardado(CLAVE_TOKEN, "") : "";
+  // El catálogo general es igual para todos: no recuerda a ningún cliente. Cada cliente entra a su cuenta por su enlace.
+  const miEnlace = "";
   // En la cuenta del cliente: pestaña Catálogo o pestaña Mis cotizaciones (?ver=cotizaciones la abre directo).
   const [vista, setVista] = useState(() => (cuenta && new URLSearchParams(window.location.search).get("ver") === "cotizaciones" ? "cotizaciones" : "catalogo"));
   const enCotizaciones = Boolean(cuenta) && vista === "cotizaciones";
@@ -1220,7 +1226,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
             <h1>Catálogo <em>interno</em></h1>
             <p>Precio de costo, flete y CBM de cada equipo. No lo compartas con clientes.</p>
           </> : dentro ? <>
-            <h1>Catálogo para <em>clientes</em></h1>
+            <h1>Catálogo <em>cliente</em></h1>
             <p>Define aquí el precio de venta de cada equipo. Tus clientes solo ven el precio de venta, nunca el costo.</p>
             <p className="cat-estado-wa">{numeroWhatsapp(whatsappPropio)
               ? `Tus clientes pueden armar su cotización y enviártela al WhatsApp +${numeroWhatsapp(whatsappPropio)}.`
@@ -1298,7 +1304,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
           <b>Ver y enviar</b>
         </button>
       )}
-      {pedir && panel && <PanelCotizacion lineas={lineas} cambiar={cambiarPedido} vaciar={vaciarPedido} empresa={empresa} cerrar={cerrarPanel} token={cuenta?.token} />}
+      {pedir && panel && <PanelCotizacion lineas={lineas} cambiar={cambiarPedido} vaciar={vaciarPedido} empresa={empresa} cerrar={cerrarPanel} token={cuenta?.token} nombre={cuenta?.nombre} />}
     </div>
   );
 }
