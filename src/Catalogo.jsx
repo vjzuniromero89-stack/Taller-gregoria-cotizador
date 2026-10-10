@@ -144,16 +144,62 @@ const ESTILOS = `
   .cat-incluye { columns:1; }
 }
 @media (max-width:380px) { .cat-grid { grid-template-columns:1fr; } }
+.cat-aviso { display:inline-block; margin-top:20px; background:#F2B705; color:#14222B; border-radius:6px; padding:4px 10px; font-size:12px;
+  font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+.cat-aviso + h1 { margin-top:10px; }
+.cat-enlace { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; max-width:640px; }
+.cat-enlace input { flex:1 1 220px; min-width:0; border:1px solid #3B5361; background:#1E2F3A; color:#fff; border-radius:8px; padding:10px 12px; font-size:15px; }
+.cat-enlace a { text-decoration:none; }
+.cat-btn:disabled { background:#9DB3B9; cursor:not-allowed; }
+
+.cat-general { background:#fff; border:1px solid #D5DEE3; border-radius:14px; padding:16px 18px; margin-top:20px; display:flex; flex-wrap:wrap;
+  align-items:center; justify-content:space-between; gap:12px 20px; }
+.cat-general b { display:block; font-family:'Barlow Condensed',sans-serif; font-size:22px; line-height:1.1; }
+.cat-general small { display:block; color:#5B6B75; font-size:13.5px; margin-top:3px; max-width:440px; line-height:1.35; }
+.cat-confirmar { flex:1 1 100%; display:flex; flex-wrap:wrap; align-items:center; gap:8px; background:#FFF4CC; border:1px solid #E2C45C;
+  border-radius:10px; padding:10px 12px; font-size:14.5px; color:#5F4600; }
+.cat-confirmar span { flex:1 1 260px; }
+
+.cat-card-editable { cursor:default; }
+.cat-card-editable:hover { transform:none; }
+.cat-card-abrir { display:flex; flex-direction:column; text-align:left; padding:0; border:0; background:none; width:100%; cursor:pointer; }
+.cat-card-abrir:focus-visible, .cat-porc:focus-visible { outline:3px solid #F2B705; outline-offset:-3px; }
+.cat-card-editable .cat-cuerpo { flex:0 0 auto; padding-bottom:10px; }
+.cat-editor { margin-top:auto; padding:12px 14px 14px; background:#F6F8F9; border-top:1px solid #E6ECEF; display:flex; flex-direction:column; gap:9px; }
+.cat-costo { display:flex; flex-direction:column; font-size:14px; color:#314551; }
+.cat-costo b { font-size:16px; color:#14222B; }
+.cat-costo small { font-size:12px; color:#5B6B75; line-height:1.3; }
+.cat-porcentajes { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.cat-porc { border:1px solid #CAD4DA; background:#fff; color:#314551; border-radius:8px; padding:7px 10px; font-size:14px; font-weight:700; min-width:48px; }
+.cat-porc:hover:not(:disabled) { border-color:#1B5E6B; }
+.cat-porc[aria-pressed="true"] { background:#1B5E6B; border-color:#1B5E6B; color:#fff; }
+.cat-porc:disabled { opacity:.5; cursor:not-allowed; }
+.cat-otro { display:inline-flex; align-items:center; gap:3px; font-size:14px; font-weight:700; color:#314551; }
+.cat-otro input { width:58px; border:1px solid #CAD4DA; border-radius:8px; padding:7px 8px; font-size:14px; background:#fff; color:#14222B; }
+.cat-venta { display:flex; flex-direction:column; gap:3px; }
+.cat-venta span { font-size:12px; font-weight:600; color:#5B6B75; }
+.cat-venta input { border:1px solid #E2C45C; background:#FFF9E6; border-radius:8px; padding:9px 10px; font-size:19px; font-weight:700; color:#14222B; width:100%; }
+.cat-otro input:focus, .cat-venta input:focus, .cat-enlace input:focus { outline:3px solid #F2B705; outline-offset:1px; }
+.cat-editor-pie { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:38px; }
+.cat-ganancia { font-size:13.5px; font-weight:600; color:#1D7A46; line-height:1.3; }
+.cat-ganancia.mal { color:#A3321F; }
+.cat-editor .cat-btn { padding:8px 14px; }
 `;
+
+const redondo = (n) => Math.round(n);
+export const precioConGanancia = (costo, porcentaje) => redondo(costo * (1 + porcentaje / 100));
 
 const normalizar = (p) => {
   const cbm = Number(p.cbm) || 0, peso = Number(p.peso) || 0;
   const porPeso = peso / KG_POR_CBM;
+  const cobrable = Math.max(cbm, porPeso);
+  const producto = Number(p.precio_producto ?? p.precioProducto) || 0;
+  const flete = cobrable * (Number(p.precio_cbm ?? p.precioCbm) || 0);
   return {
     id: p.id, codigo: p.codigo || "", nombre: p.nombre || "", categoria: p.categoria || "Sin categoría",
-    cbm, peso, cobrable: Math.max(cbm, porPeso), por: porPeso > cbm ? "peso" : "volumen",
-    precio: Number(p.precio_producto ?? p.precioProducto) || 0, foto: p.foto || "",
-    ficha: leerDescripcion(p.descripcion),
+    cbm, peso, cobrable, por: porPeso > cbm ? "peso" : "volumen",
+    producto, flete, costo: producto + flete, venta: Number(p.precio_venta ?? p.precioVenta) || 0,
+    foto: p.foto || "", ficha: leerDescripcion(p.descripcion),
   };
 };
 
@@ -163,34 +209,95 @@ function Foto({ src, alt }) {
   return <img src={src} alt={alt} loading="lazy" onError={() => setRota(true)} />;
 }
 
-function Tarjeta({ p, abrir }) {
+const PORCENTAJES = [20, 30, 40];
+
+/** Fija el precio de venta de un equipo: por porcentaje de ganancia sobre el costo o escrito a mano. */
+function EditorPrecio({ p, guardar }) {
+  const [precio, setPrecio] = useState(p.venta > 0 ? String(p.venta) : "");
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => { setPrecio(p.venta > 0 ? String(p.venta) : ""); }, [p.venta]);
+
+  const valor = Math.max(0, parseFloat(String(precio).replace(",", ".")) || 0);
+  const ganancia = valor - p.costo;
+  const porcentaje = p.costo > 0 && valor > 0 ? (ganancia / p.costo) * 100 : null;
+  const cambiado = valor !== p.venta;
+  const escribirPorcentaje = (texto) => {
+    const n = parseFloat(String(texto).replace(",", "."));
+    setPrecio(texto === "" || isNaN(n) ? "" : String(precioConGanancia(p.costo, n)));
+  };
+  const enviar = async () => { setGuardando(true); await guardar(p.id, valor); setGuardando(false); };
+
   return (
-    <button type="button" className="cat-card" onClick={abrir} aria-label={`Ver ${p.codigo}, ${p.nombre}`}>
-      <div className="cat-foto">
-        {p.ficha.marca && <span className="cat-etiqueta">{p.ficha.marca}</span>}
-        <Foto src={p.foto} alt="" />
+    <div className="cat-editor">
+      <div className="cat-costo cat-num">
+        <span>Costo <b>{dinero(p.costo)}</b></span>
+        <small>{p.flete > 0 ? `producto ${dinero(p.producto)} + flete ${dinero(p.flete)}` : "sin flete: falta el CBM o el precio CBM"}</small>
       </div>
-      <div className="cat-cuerpo">
-        <span className="cat-categoria">{p.categoria}</span>
-        <span className="cat-modelo cat-num">{p.codigo}</span>
-        <span className="cat-nombre">{p.nombre}</span>
+      <div className="cat-porcentajes" role="group" aria-label={`Ganancia de ${p.codigo}`}>
+        {PORCENTAJES.map((n) => (
+          <button type="button" key={n} className="cat-porc" disabled={p.costo <= 0}
+            aria-pressed={valor > 0 && valor === precioConGanancia(p.costo, n)}
+            onClick={() => setPrecio(String(precioConGanancia(p.costo, n)))}>{n}%</button>
+        ))}
+        <label className="cat-otro">
+          <input className="cat-num" inputMode="decimal" placeholder="Otro" aria-label="Otro porcentaje de ganancia" disabled={p.costo <= 0}
+            value={porcentaje === null || PORCENTAJES.some((n) => valor === precioConGanancia(p.costo, n)) ? "" : String(Math.round(porcentaje * 10) / 10)}
+            onChange={(e) => escribirPorcentaje(e.target.value)} />%
+        </label>
+      </div>
+      <label className="cat-venta">
+        <span>Precio de venta (US$)</span>
+        <input className="cat-num" inputMode="decimal" placeholder="0" value={precio} onChange={(e) => setPrecio(e.target.value)} />
+      </label>
+      <div className="cat-editor-pie">
+        <span className={`cat-ganancia cat-num ${valor > 0 && ganancia < 0 ? "mal" : ""}`}>
+          {valor <= 0 ? "Sin precio: el cliente verá “Consultar”" :
+            `${ganancia < 0 ? "Pierdes" : "Ganas"} ${dinero(Math.abs(ganancia))}${porcentaje === null ? "" : ` (${porcentaje.toLocaleString("en-US", { maximumFractionDigits: 1 })}%)`}`}
+        </span>
+        {cambiado && <button type="button" className="cat-btn" onClick={enviar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar"}</button>}
+      </div>
+    </div>
+  );
+}
+
+function Tarjeta({ p, modo, abrir, guardar }) {
+  const precio = modo === "cliente" ? p.venta : p.producto;
+  const contenido = <>
+    <div className="cat-foto">
+      {p.ficha.marca && <span className="cat-etiqueta">{p.ficha.marca}</span>}
+      <Foto src={p.foto} alt="" />
+    </div>
+    <div className="cat-cuerpo">
+      <span className="cat-categoria">{p.categoria}</span>
+      <span className="cat-modelo cat-num">{p.codigo}</span>
+      <span className="cat-nombre">{p.nombre}</span>
+      {modo === "interno" && (
         <div className="cat-chips">
           {p.cobrable > 0 && <span className="cat-chip cat-num"><Box size={13} />{m3(p.cobrable)}</span>}
           {p.peso > 0 && <span className="cat-chip cat-num"><Scale size={13} />{kilos(p.peso)}</span>}
         </div>
+      )}
+      {!guardar && (
         <div className="cat-pie">
           <div className="cat-precio">
-            <small>Precio</small>
-            <b className="cat-num">{p.precio > 0 ? dinero(p.precio) : "Consultar"}</b>
+            <small>{modo === "cliente" ? "Precio" : "Precio de costo"}</small>
+            <b className="cat-num">{precio > 0 ? dinero(precio) : "Consultar"}</b>
           </div>
           <span className="cat-ver">Ver ficha<ChevronRight size={15} /></span>
         </div>
-      </div>
-    </button>
+      )}
+    </div>
+  </>;
+  if (!guardar) return <button type="button" className="cat-card" onClick={abrir} aria-label={`Ver ${p.codigo}, ${p.nombre}`}>{contenido}</button>;
+  return (
+    <div className="cat-card cat-card-editable">
+      <button type="button" className="cat-card-abrir" onClick={abrir} aria-label={`Ver ${p.codigo}, ${p.nombre}`}>{contenido}</button>
+      <EditorPrecio p={p} guardar={guardar} />
+    </div>
   );
 }
 
-function Ficha({ p, cerrar }) {
+function Ficha({ p, modo, cerrar }) {
   const [copiado, setCopiado] = useState(false);
   useEffect(() => {
     const tecla = (e) => { if (e.key === "Escape") cerrar(); };
@@ -201,13 +308,15 @@ function Ficha({ p, cerrar }) {
   }, [cerrar]);
 
   const compartir = async () => {
-    const enlace = `${window.location.origin}/catalogo#${encodeURIComponent(p.codigo)}`;
+    const enlace = `${window.location.origin}${RUTAS[modo]}#${encodeURIComponent(p.codigo)}`;
     try {
       if (navigator.share) await navigator.share({ title: `${p.codigo} · ${p.nombre}`, url: enlace });
       else { await navigator.clipboard.writeText(enlace); setCopiado(true); setTimeout(() => setCopiado(false), 2200); }
     } catch { /* la persona canceló */ }
   };
   const f = p.ficha;
+  const interno = modo === "interno";
+  const precio = interno ? p.producto : p.venta;
 
   return (
     <div className="cat-fondo" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrar(); }}>
@@ -221,15 +330,28 @@ function Ficha({ p, cerrar }) {
             <h3>{p.nombre}</h3>
             {f.resumen && <p className="cat-resumen">{f.resumen}</p>}
             <div className="cat-precio-grande">
-              <small>Precio del producto</small>
-              <b className="cat-num">{p.precio > 0 ? dinero(p.precio) : "Consultar"}</b>
+              <small>{interno ? "Precio de costo del producto" : "Precio"}</small>
+              <b className="cat-num">{precio > 0 ? dinero(precio) : "Consultar"}</b>
             </div>
-            <div className="cat-datos">
-              <div className="cat-dato"><small><Box size={13} />CBM por volumen</small><b className="cat-num">{p.cbm > 0 ? m3(p.cbm) : "Por confirmar"}</b></div>
-              <div className="cat-dato"><small><Scale size={13} />Peso</small><b className="cat-num">{p.peso > 0 ? kilos(p.peso) : "Por confirmar"}</b></div>
-              <div className="cat-dato cobro"><small><Ship size={13} />CBM a cobrar</small>
-                <b className="cat-num">{p.cobrable > 0 ? `${m3(p.cobrable)}, por ${p.por}` : "Por confirmar"}</b></div>
-            </div>
+            {interno ? (
+              <>
+                <div className="cat-datos">
+                  <div className="cat-dato"><small><Ship size={13} />Flete</small><b className="cat-num">{p.flete > 0 ? dinero(p.flete) : "Por confirmar"}</b></div>
+                  <div className="cat-dato"><small>Costo total</small><b className="cat-num">{dinero(p.costo)}</b></div>
+                  <div className="cat-dato"><small>Precio de venta</small><b className="cat-num">{p.venta > 0 ? dinero(p.venta) : "Sin definir"}</b></div>
+                </div>
+                <div className="cat-datos">
+                  <div className="cat-dato"><small><Box size={13} />CBM por volumen</small><b className="cat-num">{p.cbm > 0 ? m3(p.cbm) : "Por confirmar"}</b></div>
+                  <div className="cat-dato"><small><Scale size={13} />Peso</small><b className="cat-num">{p.peso > 0 ? kilos(p.peso) : "Por confirmar"}</b></div>
+                  <div className="cat-dato cobro"><small><Ship size={13} />CBM a cobrar</small>
+                    <b className="cat-num">{p.cobrable > 0 ? `${m3(p.cobrable)}, por ${p.por}` : "Por confirmar"}</b></div>
+                </div>
+              </>
+            ) : p.peso > 0 && (
+              <div className="cat-datos">
+                <div className="cat-dato"><small><Scale size={13} />Peso</small><b className="cat-num">{kilos(p.peso)}</b></div>
+              </div>
+            )}
             {f.empaque && <div className="cat-dato"><small>Medidas de empaque</small><b className="cat-num">{f.empaque}</b></div>}
             <div style={{ marginTop: 6 }}>
               <button type="button" className="cat-btn claro" onClick={compartir}>
@@ -273,7 +395,66 @@ function Ficha({ p, cerrar }) {
   );
 }
 
-export default function CatalogoPublico({ productos: propios }) {
+/** Enlace para compartir el catálogo, con botones de copiar y abrir. */
+export function EnlaceCatalogo({ modo, avisar }) {
+  const enlace = `${window.location.origin}${RUTAS[modo]}`;
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(enlace); avisar?.("Enlace copiado"); }
+    catch { avisar?.("Selecciona el enlace y cópialo manualmente.", "error"); }
+  };
+  return (
+    <div className="cat-enlace">
+      <input readOnly value={enlace} aria-label={`Enlace del ${TITULOS[modo].toLowerCase()}`} onFocus={(e) => e.target.select()} />
+      <button type="button" className="cat-btn" onClick={copiar}><Share2 size={16} />Copiar enlace</button>
+      <a className="cat-btn claro" href={enlace} target="_blank" rel="noopener noreferrer">Abrir</a>
+    </div>
+  );
+}
+
+/** Aplica un mismo porcentaje de ganancia a todos los equipos. */
+function GananciaGeneral({ cuantos, aplicar }) {
+  const [porcentaje, setPorcentaje] = useState("");
+  const [confirmar, setConfirmar] = useState(false);
+  const [trabajando, setTrabajando] = useState(false);
+  const n = parseFloat(String(porcentaje).replace(",", "."));
+  const valido = !isNaN(n) && n >= 0;
+  const enviar = async () => { setTrabajando(true); await aplicar(n); setTrabajando(false); setConfirmar(false); };
+  return (
+    <section className="cat-general">
+      <div>
+        <b>Ganancia para todos los equipos</b>
+        <small>Calcula el precio de venta sobre el costo (producto + flete). Después puedes ajustar cada equipo.</small>
+      </div>
+      <div className="cat-porcentajes" role="group" aria-label="Ganancia para todos">
+        {PORCENTAJES.map((x) => (
+          <button type="button" key={x} className="cat-porc" aria-pressed={n === x} onClick={() => { setPorcentaje(String(x)); setConfirmar(false); }}>{x}%</button>
+        ))}
+        <label className="cat-otro">
+          <input className="cat-num" inputMode="decimal" placeholder="Otro" aria-label="Otro porcentaje para todos"
+            value={PORCENTAJES.includes(n) ? "" : porcentaje} onChange={(e) => { setPorcentaje(e.target.value); setConfirmar(false); }} />%
+        </label>
+        {!confirmar && <button type="button" className="cat-btn" disabled={!valido} onClick={() => setConfirmar(true)}>Aplicar a todos</button>}
+      </div>
+      {confirmar && (
+        <div className="cat-confirmar" role="alert">
+          <span>Se cambiará el precio de venta de {cuantos} equipos a costo + {n}%, incluidos los que escribiste a mano.</span>
+          <button type="button" className="cat-btn claro" onClick={() => setConfirmar(false)}>Cancelar</button>
+          <button type="button" className="cat-btn" onClick={enviar} disabled={trabajando}>{trabajando ? "Aplicando…" : "Sí, aplicar"}</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const RUTAS = { cliente: "/catalogo", interno: "/catalogo-interno" };
+const API = { cliente: "/api/catalogo", interno: "/api/catalogo-interno" };
+const TITULOS = { cliente: "Catálogo para clientes", interno: "Catálogo interno" };
+
+/**
+ * modo "cliente": precio de venta, sin costos. modo "interno": precio de costo, flete y CBM.
+ * Con `productos` se muestra dentro de la app; con `guardarPrecio` cada equipo trae su editor de precio de venta.
+ */
+export default function Catalogo({ modo = "cliente", productos: propios, guardarPrecio, aplicarGanancia, avisar }) {
   const dentro = Array.isArray(propios);
   const [descargados, setProductos] = useState([]);
   const [descarga, setEstado] = useState("cargando");
@@ -289,7 +470,7 @@ export default function CatalogoPublico({ productos: propios }) {
     (async () => {
       let lista = null;
       try {
-        const res = await fetch("/api/catalogo", { cache: "no-store", signal: controller.signal });
+        const res = await fetch(API[modo], { cache: "no-store", signal: controller.signal });
         const data = await res.json();
         if (res.ok && Array.isArray(data)) lista = data;
       } catch (error) { if (error.name === "AbortError") return; }
@@ -298,7 +479,7 @@ export default function CatalogoPublico({ productos: propios }) {
       setEstado("listo");
     })();
     return () => controller.abort();
-  }, [dentro]);
+  }, [dentro, modo]);
 
   useEffect(() => {
     const alCambiar = () => setAbierto(decodeURIComponent(window.location.hash.slice(1)));
@@ -325,9 +506,10 @@ export default function CatalogoPublico({ productos: propios }) {
   }, [productos, q, categoria]);
 
   const seleccionado = abierto ? productos.find((p) => p.codigo.toLowerCase() === abierto.toLowerCase()) : null;
+  const sinPrecio = productos.filter((p) => p.venta <= 0).length;
 
   return (
-    <div className={dentro ? "cat cat-dentro" : "cat"}>
+    <div className={`cat cat-${modo}${dentro ? " cat-dentro" : ""}`}>
       <style>{ESTILOS}</style>
       <header className="cat-top">
         <div className="cat-wrap cat-top-in">
@@ -335,8 +517,18 @@ export default function CatalogoPublico({ productos: propios }) {
             <img src={LOGO_POR_DEFECTO} alt="" />
             <div><b>Taller Gregoriana</b><span>Taller Mecánico y Lubricentro</span></div>
           </div>
-          <h1>Catálogo de <em>equipos</em> para taller</h1>
-          <p>Elevadores, alineadoras, desmontadoras, balanceadoras y más. Toca un equipo para ver su ficha técnica completa.</p>
+          {modo === "interno" ? <>
+            <span className="cat-aviso">Uso interno · precios de costo</span>
+            <h1>Catálogo <em>interno</em></h1>
+            <p>Precio de costo, flete y CBM de cada equipo. No lo compartas con clientes.</p>
+          </> : dentro ? <>
+            <h1>Catálogo para <em>clientes</em></h1>
+            <p>Define aquí el precio de venta de cada equipo. Tus clientes solo ven el precio de venta, nunca el costo.</p>
+          </> : <>
+            <h1>Catálogo de <em>equipos</em> para taller</h1>
+            <p>Elevadores, alineadoras, desmontadoras, balanceadoras y más. Toca un equipo para ver su ficha técnica completa.</p>
+          </>}
+          {dentro && <EnlaceCatalogo modo={modo} avisar={avisar} />}
           <div className="cat-buscar">
             <Search size={20} aria-hidden="true" />
             <input type="search" placeholder="Buscar por modelo, nombre o categoría" aria-label="Buscar equipo"
@@ -362,8 +554,10 @@ export default function CatalogoPublico({ productos: propios }) {
 
       <main className="cat-wrap">
         {estado === "cargando" ? <p className="cat-cuenta" role="status">Cargando equipos…</p> : <>
+          {aplicarGanancia && productos.length > 0 && <GananciaGeneral cuantos={productos.length} aplicar={aplicarGanancia} />}
           <p className="cat-cuenta" role="status">
             {filtrados.length === productos.length ? `${productos.length} equipos` : `${filtrados.length} de ${productos.length} equipos`}
+            {guardarPrecio && sinPrecio > 0 && ` · ${sinPrecio} sin precio de venta`}
           </p>
           {!productos.length ? <div className="cat-vacio">Próximamente encontrarás nuestros equipos aquí.</div> :
             !filtrados.length ? (
@@ -371,13 +565,13 @@ export default function CatalogoPublico({ productos: propios }) {
                 <p style={{ margin: "0 0 14px" }}>Ningún equipo coincide con tu búsqueda.</p>
                 <button type="button" className="cat-btn" onClick={() => { setQ(""); setCategoria(""); }}>Ver todos los equipos</button>
               </div>
-            ) : <div className="cat-grid">{filtrados.map((p) => <Tarjeta key={p.id} p={p} abrir={() => abrir(p.codigo)} />)}</div>}
+            ) : <div className="cat-grid">{filtrados.map((p) => <Tarjeta key={p.id} p={p} modo={modo} abrir={() => abrir(p.codigo)} guardar={guardarPrecio} />)}</div>}
         </>}
       </main>
 
       <footer className="cat-pie-pagina">Taller Gregoriana · Precios en dólares.</footer>
 
-      {seleccionado && <Ficha p={seleccionado} cerrar={cerrar} />}
+      {seleccionado && <Ficha p={seleccionado} modo={modo} cerrar={cerrar} />}
     </div>
   );
 }

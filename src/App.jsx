@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Camera, Image as ImageIcon, Pencil, Trash2, X, Plus, Search, FileText,
   Printer, Share2, Eye, Home, Package, FileText as FileTextIcon, Users, Menu,
-  TrendingUp, DollarSign, Ship, Cloud, CloudOff, BookOpen,
+  TrendingUp, DollarSign, Ship, Cloud, CloudOff, BookOpen, Tag,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
-import CatalogoPublico from "./Catalogo.jsx";
+import Catalogo, { EnlaceCatalogo as EnlaceDeCatalogo, precioConGanancia } from "./Catalogo.jsx";
 import { FICHA_VACIA, armarDescripcion, leerDescripcion, cbmDeMedidas } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
@@ -48,6 +48,11 @@ const STYLES = `
 .pos { color:#1D7A46; } .neg { color:#A3321F; }
 .pos-dark { color:#86D9A8; } .neg-dark { color:#F4A08C; }
 
+.enlaces-catalogo { display:grid; gap:14px; margin-top:12px; }
+.enlaces-catalogo .cat-enlace { display:flex; flex-wrap:wrap; gap:8px; }
+.enlaces-catalogo .cat-enlace input { flex:1 1 220px; min-width:0; background:#F6F8F9; border:1px solid #CAD4DA; border-radius:6px; padding:9px 10px; font-size:16px; color:#14222B; }
+.enlaces-catalogo .cat-btn { border-radius:6px; padding:10px 16px; font-weight:600; font-size:15px; display:inline-flex; align-items:center; gap:6px; background:#1B5E6B; color:#fff; text-decoration:none; }
+.enlaces-catalogo .cat-btn.claro { background:#fff; color:#1B5E6B; border:1px solid #CAD4DA; }
 .chip { display:inline-flex; align-items:center; background:#FFF4CC; border:1px solid #E2C45C; color:#7A5A00;
         border-radius:999px; padding:1px 10px; font-size:12px; font-weight:600; white-space:nowrap; line-height:1.5; }
 
@@ -235,7 +240,7 @@ const STYLES = `
   .sidebar.open { transform:translateX(0); }
   .main-content { padding:14px; padding-top:76px; padding-bottom:96px; }
   .mobile-bottom-nav { position:fixed; left:0; right:0; bottom:0; z-index:43; display:grid;
-    grid-template-columns:repeat(5,1fr); background:#fff; border-top:1px solid #CAD4DA;
+    grid-template-columns:repeat(6,1fr); background:#fff; border-top:1px solid #CAD4DA;
     box-shadow:0 -4px 16px rgba(20,34,43,.10); padding:6px 4px max(6px,env(safe-area-inset-bottom)); }
   .mobile-nav-item { min-width:0; padding:7px 2px 5px; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:3px; color:#5B6B75; font-size:10px;
@@ -2117,7 +2122,8 @@ const VACIA = { contador: 0, lista: [] };
 const TABS = [
   { id: "inicio", label: "Inicio", icon: Home },
   { id: "productos", label: "Producto", icon: Package },
-  { id: "catalogo", label: "Catálogo", icon: BookOpen },
+  { id: "catalogo-interno", label: "Catálogo interno", corto: "Cat. interno", icon: BookOpen },
+  { id: "catalogo-cliente", label: "Catálogo cliente", corto: "Cat. cliente", icon: Tag },
   { id: "internas", label: "Cotizaciones internas", icon: FileTextIcon },
   { id: "clientes", label: "Cotizaciones clientes", icon: Users },
 ];
@@ -2203,6 +2209,17 @@ function AdminApp() {
       avisar(`No se pudo eliminar: ${error.message}`, "error");
       return false;
     }
+  };
+  const guardarPrecioVenta = async (id, precioVenta) => {
+    const ok = await guardarProductos(productos.map((p) => (p.id === id ? { ...p, precioVenta } : p)));
+    if (ok) avisar(precioVenta > 0 ? "Precio de venta guardado" : "Precio de venta quitado");
+    return ok;
+  };
+  const aplicarGanancia = async (porcentaje) => {
+    const costo = (p) => num(p.precioProducto) + cbmCobro(p.cbm, p.peso).cobrable * num(p.precioCbm);
+    const ok = await guardarProductos(productos.map((p) => (costo(p) > 0 ? { ...p, precioVenta: precioConGanancia(costo(p), porcentaje) } : p)));
+    if (ok) avisar(`Precio de venta actualizado: costo + ${porcentaje}%`);
+    return ok;
   };
   const guardarInternas = async (data) => {
     setInternas(data);
@@ -2297,7 +2314,11 @@ function AdminApp() {
                   <ProductosView productos={productos} guardarProductos={guardarProductos} eliminarProducto={eliminarProducto} avisar={avisar}
                     empresa={empresa} guardarEmpresa={guardarEmpresa} />
                 )}
-                {tab === "catalogo" && <CatalogoPublico productos={productos} />}
+                {tab === "catalogo-interno" && <Catalogo modo="interno" productos={productos} avisar={avisar} />}
+                {tab === "catalogo-cliente" && (
+                  <Catalogo modo="cliente" productos={productos} avisar={avisar}
+                    guardarPrecio={guardarPrecioVenta} aplicarGanancia={aplicarGanancia} />
+                )}
                 {tab === "internas" && (
                   <CotizacionInternaView cotiz={internas} guardarCotizaciones={guardarInternas}
                     clientes={clientes} avisar={avisar} empresa={empresa} />
@@ -2320,7 +2341,7 @@ function AdminApp() {
             <button key={item.id} className="mobile-nav-item" aria-selected={tab === item.id}
               onClick={() => cambiarTab(item.id)}>
               <Icon size={20} />
-              <span>{item.id === "internas" ? "Internas" : item.id === "clientes" ? "Clientes" : item.label}</span>
+              <span>{item.id === "internas" ? "Internas" : item.id === "clientes" ? "Clientes" : item.corto || item.label}</span>
             </button>
           );
         })}
@@ -2340,24 +2361,21 @@ function AdminApp() {
 
 
 function EnlaceCatalogo({ avisar }) {
-  const enlace = `${window.location.origin}/catalogo`;
-  const copiar = async () => {
-    try { await navigator.clipboard.writeText(enlace); avisar("Enlace del catálogo copiado"); }
-    catch { avisar("Selecciona el enlace y cópialo manualmente.", "error"); }
-  };
   return <section className="paper p-4">
-    <h2 className="cond text-2xl font-semibold">Catálogo para compartir</h2>
-    <p className="muted text-sm mt-1">Un catálogo con fotos, precios y ficha técnica de cada producto que guardes aquí.</p>
-    <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
-      <input className="inp" style={{ flex: "1 1 240px" }} aria-label="Enlace del catálogo" readOnly value={enlace} onFocus={e => e.target.select()} />
-      <button className="btn btn-primary" onClick={copiar}><Share2 size={17} />Copiar enlace</button>
-      <a className="btn btn-ghost" href={enlace} target="_blank" rel="noopener noreferrer"><Eye size={17} />Ver catálogo</a>
+    <h2 className="cond text-2xl font-semibold">Catálogos para compartir</h2>
+    <p className="muted text-sm mt-1">Cada catálogo tiene su propio enlace. El de clientes muestra solo el precio de venta; el interno muestra el precio de costo.</p>
+    <div className="enlaces-catalogo">
+      <div><span className="lbl">Catálogo para clientes (precio de venta)</span><EnlaceDeCatalogo modo="cliente" avisar={avisar} /></div>
+      <div><span className="lbl">Catálogo interno (precio de costo)</span><EnlaceDeCatalogo modo="interno" avisar={avisar} /></div>
     </div>
   </section>;
 }
 
 export default function App() {
-  return window.location.pathname.replace(/\/+$/, "") === "/catalogo" ? <CatalogoPublico /> : <AdminApp />;
+  const ruta = window.location.pathname.replace(/\/+$/, "");
+  if (ruta === "/catalogo") return <Catalogo modo="cliente" />;
+  if (ruta === "/catalogo-interno") return <Catalogo modo="interno" />;
+  return <AdminApp />;
 }
 
 function FichaProducto({ p, acciones, children, mostrarCategoria = true }) {

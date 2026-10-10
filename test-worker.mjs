@@ -31,8 +31,10 @@ for(const path of ['/api/productos','/api/productos?id=','/api/productos?id=one%
 console.log('Pruebas de eliminación correctas: fila seleccionada, último producto, permisos, cero filas e ID inválido.');
 // Public catalog excludes internal fields and reads subsequent pages.
 let pages=0;
-globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,categoria,cbm,peso,precio_producto,foto');pages++;return Response.json(u.searchParams.get('offset')==='0'?[{id:'public1',nombre:'Producto',categoria:'Maquinaria',precio_venta:20,precio_producto:10,precio_cbm:5}]:[]);};
-r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,200);const catalog=await r.json();assert.equal(catalog[0].precio_producto,10);assert.equal(catalog[0].categoria,'Maquinaria');assert.equal('precio_venta' in catalog[0],false);assert.equal('precio_cbm' in catalog[0],false);assert.equal(pages,2);
+globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,categoria,peso,precio_venta,foto');pages++;return Response.json(u.searchParams.get('offset')==='0'?[{id:'public1',nombre:'Producto',categoria:'Maquinaria',precio_venta:20,precio_producto:10,precio_cbm:5}]:[]);};
+r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,200);const catalog=await r.json();assert.equal(catalog[0].precio_venta,20);assert.equal(catalog[0].categoria,'Maquinaria');assert.equal('precio_producto' in catalog[0],false);assert.equal('precio_cbm' in catalog[0],false);assert.equal('cbm' in catalog[0],false);assert.equal(pages,2);
+globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,categoria,cbm,peso,precio_cbm,precio_producto,precio_venta,foto');return Response.json(u.searchParams.get('offset')==='0'?[{id:'interno1',nombre:'Producto',precio_venta:20,precio_producto:10,precio_cbm:5,creado:'x'}]:[]);};
+r=await worker.fetch(req('/api/catalogo-interno'),env);assert.equal(r.status,200);const interno=await r.json();assert.equal(interno[0].precio_producto,10);assert.equal(interno[0].precio_cbm,5);assert.equal('creado' in interno[0],false);
 globalThis.fetch=async()=>Response.json({message:'internal error'},{status:403});
 r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,503);assert.equal((await r.text()).includes('internal error'),false);
 console.log('Catálogo: paginación, campos públicos y errores verificados.');

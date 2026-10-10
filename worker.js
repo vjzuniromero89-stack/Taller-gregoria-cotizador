@@ -34,6 +34,11 @@ async function sbRequest(env, path, init = {}) {
   return res.ok ? { ok: true, status: res.status, data } : { ok: false, status: res.status, error: data || text };
 }
 
+const CATALOGOS = {
+  "/api/catalogo": ["id", "codigo", "nombre", "descripcion", "categoria", "peso", "precio_venta", "foto"],
+  "/api/catalogo-interno": ["id", "codigo", "nombre", "descripcion", "categoria", "cbm", "peso", "precio_cbm", "precio_producto", "precio_venta", "foto"],
+};
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -56,15 +61,17 @@ export default {
       }, result.ok ? 200 : result.status);
     }
 
-    if (url.pathname === "/api/catalogo" && request.method === "GET") {
+    // Catálogo para clientes: solo precio de venta, nunca costos. Catálogo interno: costos, flete y CBM.
+    const campos = request.method === "GET" && CATALOGOS[url.pathname];
+    if (campos) {
       const productos = [];
       // Stable ordering and pagination avoid truncating large catalogs.
       for (let offset = 0; ; ) {
-        const r = await sbRequest(env, `productos?select=id,codigo,nombre,descripcion,categoria,cbm,peso,precio_producto,foto&order=creado.desc,id.asc&limit=500&offset=${offset}`);
+        const r = await sbRequest(env, `productos?select=${campos.join(",")}&order=creado.desc,id.asc&limit=500&offset=${offset}`);
         if (!r.ok) return json({ ok: false, error: "El catálogo no está disponible temporalmente." }, 503);
         if (!Array.isArray(r.data)) return json({ ok: false, error: "Respuesta de catálogo inválida." }, 502);
         if (!r.data.length) break;
-        productos.push(...r.data.map(({ id, codigo, nombre, descripcion, categoria, cbm, peso, precio_producto, foto }) => ({ id, codigo, nombre, descripcion, categoria, cbm, peso, precio_producto, foto })));
+        productos.push(...r.data.map((fila) => Object.fromEntries(campos.map((campo) => [campo, fila[campo]]))));
         offset += r.data.length;
       }
       return json(productos);
