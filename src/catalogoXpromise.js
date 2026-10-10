@@ -89,7 +89,7 @@ const EQUIPOS = [
     ],
   },
   {
-    codigo: "X7640", nombre: "Elevador de cuatro postes 4,000 kg", categoria: "Elevadores", precio: 2160, foto: "x7640",
+    codigo: "XP-7640", nombre: "Elevador de cuatro postes 4,000 kg", categoria: "Elevadores", precio: 2160, foto: "x7640",
     empaque: "4370 × 560 × 790 mm",
     resumen: "Elevador de cuatro postes con gato rodante hidráulico, ideal para alineación.",
     caracteristicas: [
@@ -232,7 +232,7 @@ const EQUIPOS = [
     incluye: ["Carro de herramientas de chapa"],
   },
   {
-    codigo: "C9335A", nombre: "Torno de frenos para discos y tambores", categoria: "Tornos de frenos", precio: 1360, foto: "c9335a", peso: 260,
+    codigo: "9335A", nombre: "Torno de frenos para discos y tambores", categoria: "Tornos de frenos", precio: 1360, foto: "c9335a", peso: 260,
     cbm: 0.395,
     resumen: "Torno de frenos con dos velocidades de giro, para rectificar discos y tambores de distintos diámetros.",
     caracteristicas: [
