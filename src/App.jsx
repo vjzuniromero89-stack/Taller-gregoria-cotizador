@@ -54,6 +54,15 @@ const STYLES = `
 .enlaces-catalogo .cat-enlace input { flex:1 1 220px; min-width:0; background:#F6F8F9; border:1px solid #CAD4DA; border-radius:6px; padding:9px 10px; font-size:16px; color:#14222B; }
 .enlaces-catalogo .cat-btn { border-radius:6px; padding:10px 16px; font-weight:600; font-size:15px; display:inline-flex; align-items:center; gap:6px; background:#1B5E6B; color:#fff; text-decoration:none; }
 .enlaces-catalogo .cat-btn.claro { background:#fff; color:#1B5E6B; border:1px solid #CAD4DA; }
+.chip-ok { background:#DDF3E6; border-color:#8FCFAA; color:#14603A; }
+.chip-info { background:#E4EFF1; border-color:#91B4BC; color:#134650; }
+.filtro-estado { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.filtro-estado button { border:1px solid #CAD4DA; background:#fff; color:#314551; border-radius:999px; padding:6px 13px; font-size:14px; font-weight:600; }
+.filtro-estado button[aria-pressed="true"] { background:#1B5E6B; border-color:#1B5E6B; color:#fff; }
+.filtro-estado button:focus-visible { outline:3px solid #F2B705; outline-offset:2px; }
+.nav-badge { margin-left:auto; background:#F2B705; color:#14222B; border-radius:999px; min-width:22px; padding:1px 7px; font-size:12px; font-weight:700; text-align:center; font-family:'Barlow',sans-serif; }
+.estado-caja { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; border-radius:10px; border:1px solid #E2C45C; background:#FFFBEA; }
+.estado-caja.ok { border-color:#8FCFAA; background:#EEF9F2; }
 .chip { display:inline-flex; align-items:center; background:#FFF4CC; border:1px solid #E2C45C; color:#7A5A00;
         border-radius:999px; padding:1px 10px; font-size:12px; font-weight:600; white-space:nowrap; line-height:1.5; }
 
@@ -478,6 +487,12 @@ function fileToDataUrl(file) {
 async function miniatura(p) {
   try { return p.foto ? await resizeSrc(p.foto, 120, 0.7) : ""; } catch (e) { return ""; }
 }
+// Una cotización de cliente está pendiente hasta que el cliente la confirma.
+const estadoDe = (c) => (c?.totales?.estado === "confirmada" ? "confirmada" : "pendiente");
+const ChipEstado = ({ c }) => estadoDe(c) === "confirmada"
+  ? <span className="chip chip-ok">Confirmada</span>
+  : <span className="chip">Pendiente</span>;
+
 const siguienteNumero = (prefijo, contador) => `${prefijo}-${String(contador).padStart(4, "0")}`;
 
 const calcLinea = (l) => {
@@ -1002,15 +1017,17 @@ function EliminarRegistro({ numero, onDelete }) {
 }
 
 function ListaRegistradas({
-  lista, onOpen, totalDe, gananciaDe, titulo = "Registradas", conDescuento = false,
+  lista, onOpen, totalDe, gananciaDe, titulo = "Registradas", conDescuento = false, conEstado = false,
   vacio = "Las cotizaciones que registres quedan guardadas aquí.",
 }) {
   const [q, setQ] = useState("");
+  const [estado, setEstado] = useState("");
   const filtradas = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return lista;
-    return lista.filter((c) => c.numero.toLowerCase().includes(s) || (c.cliente || "").toLowerCase().includes(s));
-  }, [lista, q]);
+    return lista.filter((c) => (!estado || estadoDe(c) === estado) &&
+      (!s || c.numero.toLowerCase().includes(s) || (c.cliente || "").toLowerCase().includes(s)));
+  }, [lista, q, estado]);
+  const cuantas = (e) => lista.filter((c) => estadoDe(c) === e).length;
 
   return (
     <section>
@@ -1024,10 +1041,17 @@ function ListaRegistradas({
           </div>
         )}
       </div>
+      {conEstado && lista.length > 0 && (
+        <div className="filtro-estado" role="group" aria-label="Filtrar por estado">
+          {[["", "Todas", lista.length], ["pendiente", "Pendientes", cuantas("pendiente")], ["confirmada", "Confirmadas", cuantas("confirmada")]].map(([valor, nombre, n]) => (
+            <button key={valor} type="button" aria-pressed={estado === valor} onClick={() => setEstado(valor)}>{nombre} ({n})</button>
+          ))}
+        </div>
+      )}
       {lista.length === 0 ? (
         <div className="paper p-6 text-center muted">{vacio}</div>
       ) : filtradas.length === 0 ? (
-        <div className="paper p-6 text-center muted">Ninguna cotización coincide con “{q}”.</div>
+        <div className="paper p-6 text-center muted">{q.trim() ? `Ninguna cotización coincide con “${q}”.` : "No hay cotizaciones en este estado."}</div>
       ) : (
         <div className="paper overflow-hidden quote-list">
           {filtradas.map((c, i) => (
@@ -1039,7 +1063,8 @@ function ListaRegistradas({
                 <div className="flex justify-between gap-2">
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="font-semibold num">{c.numero}</span>
-                    {c.totales?.contacto?.origen === "catalogo" && <span className="chip">Del catálogo</span>}
+                    {conEstado && <ChipEstado c={c} />}
+                    {c.totales?.contacto?.origen === "catalogo" && <span className="chip chip-info">Del catálogo</span>}
                     {conDescuento && num(c.descuento) > 0 && (
                       <span className="chip num">{m3(num(c.descuento))}% desc.</span>
                     )}
@@ -1653,7 +1678,14 @@ function LineaClienteCard({ l, onChange, onRemove }) {
   );
 }
 
-function DetalleCliente({ cot, onClose, onDelete, empresa, avisar }) {
+function DetalleCliente({ cot, onClose, onDelete, onEstado, empresa, avisar }) {
+  const confirmada = estadoDe(cot) === "confirmada";
+  const [cambiando, setCambiando] = useState(false);
+  const alternarEstado = async () => {
+    setCambiando(true);
+    await onEstado(cot.id, confirmada ? "pendiente" : "confirmada");
+    setCambiando(false);
+  };
   const t = useMemo(() => calcTotalesCliente(cot.lineas), [cot]);
   const porcentaje = Math.min(100, Math.max(0, num(cot.descuento)));
   const totalFinal = totalConDescuento(cot, t.totalVenta);
@@ -1700,8 +1732,23 @@ function DetalleCliente({ cot, onClose, onDelete, empresa, avisar }) {
 
   return (
     <ModalShell titulo={cot.numero} subtitulo={`${cot.cliente || "Sin cliente"}, ${fecha(cot.fecha)}`} onClose={onClose}>
+      {onEstado && (
+        <div className={`estado-caja ${confirmada ? "ok" : ""}`}>
+          <div>
+            <div className="font-semibold">{confirmada ? "Confirmada por el cliente" : "Pendiente de confirmar"}</div>
+            <div className="text-sm muted">
+              {confirmada
+                ? (cot.totales?.confirmadaEl ? `Confirmada el ${fecha(cot.totales.confirmadaEl)}` : "El cliente aceptó esta cotización.")
+                : "Márcala como confirmada cuando el cliente la acepte."}
+            </div>
+          </div>
+          <button className={confirmada ? "btn btn-ghost" : "btn btn-primary"} onClick={alternarEstado} disabled={cambiando}>
+            {cambiando ? "Guardando…" : confirmada ? "Volver a pendiente" : "Marcar como confirmada"}
+          </button>
+        </div>
+      )}
       {cot.totales?.contacto?.origen === "catalogo" && (
-        <div className="paper p-3" style={{ background: "#FFFBEA", borderColor: "#E2C45C" }}>
+        <div className="paper p-3" style={{ background: "#F3F6F7", borderColor: "#CAD4DA" }}>
           <div className="font-semibold">Enviada por el cliente desde el catálogo</div>
           <div className="text-sm mt-1 num">Teléfono: {cot.totales.contacto.telefono || "sin teléfono"}</div>
           {cot.totales.contacto.nota && <div className="text-sm mt-1" style={{ overflowWrap: "anywhere" }}>Nota: {cot.totales.contacto.nota}</div>}
@@ -1790,6 +1837,16 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
     }
   }
 
+  async function cambiarEstado(id, estado) {
+    const actual = cotiz.lista.find((c) => c.id === id);
+    if (!actual) return;
+    const totales = { ...actual.totales, estado };
+    if (estado === "confirmada") totales.confirmadaEl = new Date().toISOString(); else delete totales.confirmadaEl;
+    const nueva = { ...actual, totales };
+    const ok = await guardarCotizaciones({ ...cotiz, lista: cotiz.lista.map((c) => (c.id === id ? nueva : c)) });
+    if (ok) { setDetalle(nueva); avisar(estado === "confirmada" ? `${nueva.numero} marcada como confirmada` : `${nueva.numero} volvió a pendiente`); }
+  }
+
   async function eliminar(id) {
     const cot = cotiz.lista.find((c) => c.id === id);
     const ok = await guardarCotizaciones({ ...cotiz, lista: cotiz.lista.filter((c) => c.id !== id) });
@@ -1869,10 +1926,11 @@ function CotizacionClienteView({ productos, cotiz, guardarCotizaciones, internas
         lista={cotiz.lista}
         onOpen={setDetalle}
         totalDe={(c) => c.totalFinal ?? c.totales.totalFinal ?? c.totales.totalVenta}
+        conEstado
       />
 
       {detalle && (
-        <DetalleCliente cot={detalle} onClose={() => setDetalle(null)} onDelete={eliminar}
+        <DetalleCliente cot={detalle} onClose={() => setDetalle(null)} onDelete={eliminar} onEstado={cambiarEstado}
           empresa={empresa} avisar={avisar} />
       )}
     </div>
@@ -2136,6 +2194,7 @@ function AdminApp() {
     window.scrollTo({ top: 0 });
   };
   const irAProductos = () => cambiarTab("productos");
+  const pendientes = clientes.lista.filter((c) => estadoDe(c) === "pendiente").length;
 
   return (
     <div className="app">
@@ -2168,6 +2227,9 @@ function AdminApp() {
                   onClick={() => cambiarTab(t.id)}>
                   <Icon size={20} className="nav-icon" />
                   <span>{t.label}</span>
+                  {t.id === "clientes" && pendientes > 0 && (
+                    <span className="nav-badge" aria-label={`${pendientes} pendientes`}>{pendientes}</span>
+                  )}
                 </button>
               );
             })}
