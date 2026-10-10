@@ -197,7 +197,7 @@ const normalizar = (p) => {
   const flete = cobrable * (Number(p.precio_cbm ?? p.precioCbm) || 0);
   return {
     id: p.id, codigo: p.codigo || "", nombre: p.nombre || "", categoria: p.categoria || "Sin categoría",
-    cbm, peso, cobrable, por: porPeso > cbm ? "peso" : "volumen",
+    cbm, peso, porPeso, cobrable, por: porPeso > cbm ? "peso" : "volumen",
     producto, flete, costo: producto + flete, venta: Number(p.precio_venta ?? p.precioVenta) || 0,
     foto: p.foto || "", ficha: leerDescripcion(p.descripcion),
   };
@@ -273,8 +273,8 @@ function Tarjeta({ p, modo, abrir, guardar }) {
       <span className="cat-nombre">{p.nombre}</span>
       {modo === "interno" && (
         <div className="cat-chips">
-          {p.cobrable > 0 && <span className="cat-chip cat-num"><Box size={13} />{m3(p.cobrable)}</span>}
-          {p.peso > 0 && <span className="cat-chip cat-num"><Scale size={13} />{kilos(p.peso)}</span>}
+          <span className="cat-chip cat-num"><Box size={13} />Volumen: {p.cbm > 0 ? m3(p.cbm) : "falta"}</span>
+          <span className="cat-chip cat-num"><Scale size={13} />Peso: {p.peso > 0 ? m3(p.porPeso) : "falta"}</span>
         </div>
       )}
       {!guardar && (
@@ -342,7 +342,9 @@ function Ficha({ p, modo, cerrar }) {
                 </div>
                 <div className="cat-datos">
                   <div className="cat-dato"><small><Box size={13} />CBM por volumen</small><b className="cat-num">{p.cbm > 0 ? m3(p.cbm) : "Por confirmar"}</b></div>
-                  <div className="cat-dato"><small><Scale size={13} />Peso</small><b className="cat-num">{p.peso > 0 ? kilos(p.peso) : "Por confirmar"}</b></div>
+                  <div className="cat-dato"><small><Scale size={13} />CBM por peso</small>
+                    <b className="cat-num">{p.peso > 0 ? m3(p.porPeso) : "Por confirmar"}</b>
+                    {p.peso > 0 && <small className="cat-num">{kilos(p.peso)} ÷ {KG_POR_CBM} kg</small>}</div>
                   <div className="cat-dato cobro"><small><Ship size={13} />CBM a cobrar</small>
                     <b className="cat-num">{p.cobrable > 0 ? `${m3(p.cobrable)}, por ${p.por}` : "Por confirmar"}</b></div>
                 </div>
