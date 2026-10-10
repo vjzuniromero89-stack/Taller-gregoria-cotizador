@@ -244,6 +244,10 @@ const ESTILOS = `
 .cat-estado-confirmada, .cat-estado-entregada { background:#DDF3E6; color:#14603A; }
 .cat-estado-produccion, .cat-estado-camino { background:#E4EFF1; color:#134650; }
 .cat-estado-cancelada { background:#EEF1F3; color:#5B6B75; }
+.cat-cuenta-mis { margin-top:22px; }
+.cat-cuenta-mis h2 { font-size:32px; font-weight:700; margin:0 0 10px; line-height:1; }
+.cat-mis-boton { background:#F2B705; color:#14222B; }
+.cat-mis-boton:hover { background:#DDA604; }
 .cat-mis { display:grid; gap:12px; }
 .cat-mi { display:flex; flex-direction:column; gap:4px; background:#fff; border:1px solid #D5DEE3; border-radius:14px; padding:14px 16px; text-decoration:none; color:inherit; }
 .cat-mi:hover { border-color:#9FB9C0; box-shadow:0 8px 22px rgba(20,34,43,.1); }
@@ -591,6 +595,7 @@ function GananciaGeneral({ cuantos, aplicar }) {
 
 /* ---------- cotización que arma el cliente y envía por WhatsApp ---------- */
 const CLAVE_PEDIDO = "catalogo-mi-cotizacion";
+const CLAVE_TOKEN = "catalogo-mi-enlace";
 const leerGuardado = (clave, porDefecto) => {
   try { return JSON.parse(window.localStorage.getItem(clave)) ?? porDefecto; } catch { return porDefecto; }
 };
@@ -771,6 +776,7 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
       const r = await res.json().catch(() => ({}));
       if (!res.ok || !r.cotizacion) throw new Error(r.error || "sin respuesta");
       setCreada(r.cotizacion);
+      if (r.cotizacion.token) guardarLocal(CLAVE_TOKEN, r.cotizacion.token);
       vaciar();
     } catch (err) {
       console.error(err);
@@ -970,8 +976,9 @@ export function VistaCotizacion({ id }) {
         <div className="cat-vista" style={{ marginTop: 16 }}><CotizacionLista cot={paraHoja} empresa={sinWhatsapp} /></div>
       </>}
       <p style={{ marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {cot?.token && <a className="cat-btn" href={`/cliente/${cot.token}`}>Ver todas mis cotizaciones</a>}
-        <a className="cat-btn claro" href="/catalogo">Ver el catálogo</a>
+        {cot?.token
+          ? <a className="cat-btn" href={`/cliente/${cot.token}`}>Mis cotizaciones y catálogo</a>
+          : <a className="cat-btn claro" href="/catalogo">Ver el catálogo</a>}
       </p>
     </PaginaCliente>
   );
@@ -979,12 +986,16 @@ export function VistaCotizacion({ id }) {
 
 /** Página pública de un cliente: /cliente/<token>. Todas sus cotizaciones y el estado de cada una. */
 export function VistaCliente({ token }) {
-  const empresa = useEmpresaPublica(true);
   const [datos, estado] = useDatosVivos(`/api/cliente/${encodeURIComponent(token)}`);
   const lista = datos?.cotizaciones || [];
-  return (
-    <PaginaCliente empresa={empresa} titulo={datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : "Mis cotizaciones"}>
-      {!datos ? <div className="cat-vacio" role="status">{AVISOS[estado] || AVISOS.cargando}</div> : <>
+  // El catálogo recuerda a este cliente para ofrecerle el botón "Mis cotizaciones".
+  useEffect(() => { if (datos) guardarLocal(CLAVE_TOKEN, token); }, [datos, token]);
+  const arriba = (
+    <section className="cat-cuenta-mis" aria-label="Mis cotizaciones">
+      <h2 className="cat-cond">Mis cotizaciones</h2>
+      {!datos ? <div className="cat-vacio" style={{ marginBottom: 0 }} role="status">
+        {estado === "no-existe" ? "Todavía no hay cotizaciones en este enlace." : AVISOS[estado] || AVISOS.cargando}
+      </div> : <>
         <p className="cat-cuenta" style={{ marginTop: 0 }}>
           {lista.length === 1 ? "Tienes 1 cotización." : `Tienes ${lista.length} cotizaciones.`} Esta página se actualiza sola.
         </p>
@@ -1010,9 +1021,10 @@ export function VistaCliente({ token }) {
           })}
         </div>
       </>}
-      <p style={{ marginTop: 18 }}><a className="cat-btn claro" href="/catalogo">Ver el catálogo</a></p>
-    </PaginaCliente>
+      <h2 className="cat-cond" style={{ marginTop: 28 }}>Catálogo</h2>
+    </section>
   );
+  return <Catalogo modo="cliente" cuenta={{ titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, arriba }} />;
 }
 
 const RUTAS = { cliente: "/catalogo", interno: "/catalogo-interno" };
@@ -1023,7 +1035,7 @@ const TITULOS = { cliente: "Catálogo para clientes", interno: "Catálogo intern
  * modo "cliente": precio de venta, sin costos. modo "interno": precio de costo, flete y CBM.
  * Con `productos` se muestra dentro de la app; con `guardarPrecio` cada equipo trae su editor de precio de venta.
  */
-export default function Catalogo({ modo = "cliente", productos: propios, guardarPrecio, aplicarGanancia, cambiarPrecioCbm, whatsapp: whatsappPropio, avisar }) {
+export default function Catalogo({ modo = "cliente", productos: propios, guardarPrecio, aplicarGanancia, cambiarPrecioCbm, whatsapp: whatsappPropio, avisar, cuenta }) {
   const dentro = Array.isArray(propios);
   const [descargados, setProductos] = useState([]);
   const [descarga, setEstado] = useState("cargando");
@@ -1076,6 +1088,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
 
   const seleccionado = abierto ? productos.find((p) => p.codigo.toLowerCase() === abierto.toLowerCase()) : null;
   const sinPrecio = productos.filter((p) => p.venta <= 0).length;
+  const miEnlace = !dentro && modo === "cliente" && !cuenta ? leerGuardado(CLAVE_TOKEN, "") : "";
 
   // Cotización del cliente: solo en el catálogo público de clientes y si el taller configuró su WhatsApp.
   const empresa = useEmpresaPublica(!dentro && modo === "cliente");
@@ -1113,9 +1126,13 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
             <p className="cat-estado-wa">{numeroWhatsapp(whatsappPropio)
               ? `Tus clientes pueden armar su cotización y enviártela al WhatsApp +${numeroWhatsapp(whatsappPropio)}.`
               : "Para que tus clientes te envíen su cotización por WhatsApp, escribe tu número en Producto, en los datos de tu empresa."}</p>
+          </> : cuenta ? <>
+            <h1>{cuenta.titulo}</h1>
+            <p>Aquí ves el estado de tus pedidos y puedes cotizar más equipos del catálogo.</p>
           </> : <>
             <h1>Catálogo de <em>equipos</em> para taller</h1>
             <p>Elevadores, alineadoras, desmontadoras, balanceadoras y más. Toca un equipo para ver su ficha técnica completa.</p>
+            {miEnlace && <p style={{ marginTop: 12 }}><a className="cat-btn cat-mis-boton" href={`/cliente/${miEnlace}`}><ClipboardList size={17} />Mis cotizaciones</a></p>}
           </>}
           {dentro && <EnlaceCatalogo modo={modo} avisar={avisar} />}
           <div className="cat-buscar">
@@ -1143,6 +1160,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
 
       <main className="cat-wrap">
         {estado === "cargando" ? <p className="cat-cuenta" role="status">Cargando equipos…</p> : <>
+          {cuenta?.arriba}
           {aplicarGanancia && productos.length > 0 && <GananciaGeneral cuantos={productos.length} aplicar={aplicarGanancia} />}
           {cambiarPrecioCbm && productos.length > 0 && <PrecioCbmGeneral productos={productos} cambiar={cambiarPrecioCbm} />}
           <p className="cat-cuenta" role="status">

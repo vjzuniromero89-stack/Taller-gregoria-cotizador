@@ -2476,10 +2476,9 @@ function AdminApp() {
       setInternas(ci && Array.isArray(ci.lista) ? ci : VACIA);
       let listaClientes = cc && Array.isArray(cc.lista) ? cc : VACIA;
       const conEnlaces = conEnlacesDeCliente(listaClientes);
-      if (conEnlaces) {
+      if (conEnlaces && (!supabase || await sbSaveCotizacionesClientes(conEnlaces))) {
         listaClientes = conEnlaces;
         localSave("cotizacionesClientes", conEnlaces);
-        if (supabase) sbSaveCotizacionesClientes(conEnlaces);
       }
       setClientes(listaClientes);
       setCargando(false);
@@ -2569,7 +2568,12 @@ function AdminApp() {
 
   const cambiarTab = (t) => {
     // Al abrir las cotizaciones de clientes se traen las que hayan llegado del catálogo.
-    if ((t === "clientes" || t === "directorio") && supabase) sbLoadCotizacionesClientes().then((cc) => { if (cc) setClientes(conEnlacesDeCliente(cc) || cc); });
+    if ((t === "clientes" || t === "directorio") && supabase) sbLoadCotizacionesClientes().then(async (cc) => {
+      if (!cc) return;
+      const conEnlaces = conEnlacesDeCliente(cc);
+      if (conEnlaces && !(await sbSaveCotizacionesClientes(conEnlaces))) { setClientes(cc); return; }
+      setClientes(conEnlaces || cc);
+    });
     setTab(t);
     setMenuAbierto(false);
     window.scrollTo({ top: 0 });
