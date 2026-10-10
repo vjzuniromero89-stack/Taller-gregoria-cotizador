@@ -176,6 +176,8 @@ const ESTILOS = `
 .cat-porc:disabled { opacity:.5; cursor:not-allowed; }
 .cat-otro { display:inline-flex; align-items:center; gap:3px; font-size:14px; font-weight:700; color:#314551; }
 .cat-otro input { width:58px; border:1px solid #CAD4DA; border-radius:8px; padding:7px 8px; font-size:14px; background:#fff; color:#14222B; }
+.cat-cbm input { width:86px; font-size:17px; font-weight:700; }
+.cat-dato small + b + small { display:block; margin-top:2px; font-weight:500; }
 .cat-venta { display:flex; flex-direction:column; gap:3px; }
 .cat-venta span { font-size:12px; font-weight:600; color:#5B6B75; }
 .cat-venta input { border:1px solid #E2C45C; background:#FFF9E6; border-radius:8px; padding:9px 10px; font-size:19px; font-weight:700; color:#14222B; width:100%; }
@@ -194,11 +196,12 @@ const normalizar = (p) => {
   const porPeso = peso / KG_POR_CBM;
   const cobrable = Math.max(cbm, porPeso);
   const producto = Number(p.precio_producto ?? p.precioProducto) || 0;
-  const flete = cobrable * (Number(p.precio_cbm ?? p.precioCbm) || 0);
+  const precioCbm = Number(p.precio_cbm ?? p.precioCbm) || 0;
+  const flete = cobrable * precioCbm;
   return {
     id: p.id, codigo: p.codigo || "", nombre: p.nombre || "", categoria: p.categoria || "Sin categoría",
     cbm, peso, porPeso, cobrable, por: porPeso > cbm ? "peso" : "volumen",
-    producto, flete, costo: producto + flete, venta: Number(p.precio_venta ?? p.precioVenta) || 0,
+    producto, precioCbm, flete, costo: producto + flete, venta: Number(p.precio_venta ?? p.precioVenta) || 0,
     foto: p.foto || "", ficha: leerDescripcion(p.descripcion),
   };
 };
@@ -336,7 +339,8 @@ function Ficha({ p, modo, cerrar }) {
             {interno ? (
               <>
                 <div className="cat-datos">
-                  <div className="cat-dato"><small><Ship size={13} />Flete</small><b className="cat-num">{p.flete > 0 ? dinero(p.flete) : "Por confirmar"}</b></div>
+                  <div className="cat-dato"><small><Ship size={13} />Flete</small><b className="cat-num">{p.flete > 0 ? dinero(p.flete) : "Por confirmar"}</b>
+                    <small className="cat-num">{p.cobrable > 0 ? m3(p.cobrable) : "falta el CBM"} × {p.precioCbm > 0 ? dinero(p.precioCbm) : "falta el precio CBM"}</small></div>
                   <div className="cat-dato"><small>Costo total</small><b className="cat-num">{dinero(p.costo)}</b></div>
                   <div className="cat-dato"><small>Precio de venta</small><b className="cat-num">{p.venta > 0 ? dinero(p.venta) : "Sin definir"}</b></div>
                 </div>
@@ -413,6 +417,42 @@ export function EnlaceCatalogo({ modo, avisar }) {
   );
 }
 
+/** Cambia el precio que se paga por cada CBM en todos los equipos a la vez. */
+function PrecioCbmGeneral({ productos, cambiar }) {
+  const actual = useMemo(() => {
+    const cuenta = new Map();
+    for (const p of productos) cuenta.set(p.precioCbm, (cuenta.get(p.precioCbm) || 0) + 1);
+    return [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 0;
+  }, [productos]);
+  const distintos = productos.filter((p) => p.precioCbm !== actual).length;
+  const [texto, setTexto] = useState(String(actual || ""));
+  const [trabajando, setTrabajando] = useState(false);
+  useEffect(() => { setTexto(String(actual || "")); }, [actual]);
+  const n = parseFloat(String(texto).replace(",", "."));
+  const valido = !isNaN(n) && n > 0;
+  const enviar = async () => { setTrabajando(true); await cambiar(n); setTrabajando(false); };
+  return (
+    <section className="cat-general">
+      <div>
+        <b>Precio del CBM</b>
+        <small>
+          Lo que te cobran hoy por cada m³. El flete de cada equipo es su CBM a cobrar por este precio.
+          {distintos > 0 && ` ${distintos} ${distintos === 1 ? "equipo tiene" : "equipos tienen"} otro precio.`}
+        </small>
+      </div>
+      <div className="cat-porcentajes">
+        <label className="cat-otro cat-cbm">US$
+          <input className="cat-num" inputMode="decimal" aria-label="Precio del CBM en dólares" value={texto} onChange={(e) => setTexto(e.target.value)} />
+          por m³
+        </label>
+        <button type="button" className="cat-btn" disabled={!valido || trabajando || (n === actual && distintos === 0)} onClick={enviar}>
+          {trabajando ? "Guardando…" : "Aplicar a todos los equipos"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** Aplica un mismo porcentaje de ganancia a todos los equipos. */
 function GananciaGeneral({ cuantos, aplicar }) {
   const [porcentaje, setPorcentaje] = useState("");
@@ -456,7 +496,7 @@ const TITULOS = { cliente: "Catálogo para clientes", interno: "Catálogo intern
  * modo "cliente": precio de venta, sin costos. modo "interno": precio de costo, flete y CBM.
  * Con `productos` se muestra dentro de la app; con `guardarPrecio` cada equipo trae su editor de precio de venta.
  */
-export default function Catalogo({ modo = "cliente", productos: propios, guardarPrecio, aplicarGanancia, avisar }) {
+export default function Catalogo({ modo = "cliente", productos: propios, guardarPrecio, aplicarGanancia, cambiarPrecioCbm, avisar }) {
   const dentro = Array.isArray(propios);
   const [descargados, setProductos] = useState([]);
   const [descarga, setEstado] = useState("cargando");
@@ -557,6 +597,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
       <main className="cat-wrap">
         {estado === "cargando" ? <p className="cat-cuenta" role="status">Cargando equipos…</p> : <>
           {aplicarGanancia && productos.length > 0 && <GananciaGeneral cuantos={productos.length} aplicar={aplicarGanancia} />}
+          {cambiarPrecioCbm && productos.length > 0 && <PrecioCbmGeneral productos={productos} cambiar={cambiarPrecioCbm} />}
           <p className="cat-cuenta" role="status">
             {filtrados.length === productos.length ? `${productos.length} equipos` : `${filtrados.length} de ${productos.length} equipos`}
             {guardarPrecio && sinPrecio > 0 && ` · ${sinPrecio} sin precio de venta`}

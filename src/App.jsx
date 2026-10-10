@@ -2215,6 +2215,11 @@ function AdminApp() {
     if (ok) avisar(precioVenta > 0 ? "Precio de venta guardado" : "Precio de venta quitado");
     return ok;
   };
+  const cambiarPrecioCbm = async (precioCbm) => {
+    const ok = await guardarProductos(productos.map((p) => ({ ...p, precioCbm })));
+    if (ok) avisar(`Precio del CBM actualizado a ${money(precioCbm)} en todos los equipos`);
+    return ok;
+  };
   const aplicarGanancia = async (porcentaje) => {
     const costo = (p) => num(p.precioProducto) + cbmCobro(p.cbm, p.peso).cobrable * num(p.precioCbm);
     const ok = await guardarProductos(productos.map((p) => (costo(p) > 0 ? { ...p, precioVenta: precioConGanancia(costo(p), porcentaje) } : p)));
@@ -2314,7 +2319,7 @@ function AdminApp() {
                   <ProductosView productos={productos} guardarProductos={guardarProductos} eliminarProducto={eliminarProducto} avisar={avisar}
                     empresa={empresa} guardarEmpresa={guardarEmpresa} />
                 )}
-                {tab === "catalogo-interno" && <Catalogo modo="interno" productos={productos} avisar={avisar} />}
+                {tab === "catalogo-interno" && <Catalogo modo="interno" productos={productos} avisar={avisar} cambiarPrecioCbm={cambiarPrecioCbm} />}
                 {tab === "catalogo-cliente" && (
                   <Catalogo modo="cliente" productos={productos} avisar={avisar}
                     guardarPrecio={guardarPrecioVenta} aplicarGanancia={aplicarGanancia} />
