@@ -3101,7 +3101,8 @@ function EnlaceCatalogo({ avisar }) {
 
 export default function App() {
   const ruta = window.location.pathname.replace(/\/+$/, "");
-  if (ruta === "/catalogo") return <Catalogo modo="cliente" />;
+  // "/catalogo" es la dirección anterior del catálogo general y sigue funcionando.
+  if (ruta === "/catalogo-cliente" || ruta === "/catalogo") return <Catalogo modo="cliente" />;
   if (ruta === "/catalogo-interno") return <Catalogo modo="interno" />;
   if (ruta.startsWith("/cotizacion/")) return <VistaCotizacion id={ruta.slice("/cotizacion/".length)} />;
   if (ruta.startsWith("/cliente/")) return <VistaCliente token={ruta.slice("/cliente/".length)} />;

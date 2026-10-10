@@ -1072,7 +1072,7 @@ export function VistaCotizacion({ id }) {
       <p style={{ marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {cot?.token
           ? <a className="cat-btn" href={`/cliente/${cot.token}?ver=cotizaciones`}>Mis cotizaciones</a>
-          : <a className="cat-btn claro" href="/catalogo">Ver el catálogo</a>}
+          : <a className="cat-btn claro" href="/catalogo-cliente">Ver el catálogo</a>}
       </p>
     </PaginaCliente>
   );
@@ -1121,7 +1121,7 @@ export function VistaCliente({ token }) {
   return <Catalogo modo="cliente" cuenta={{ token, nombre: datos?.nombre || "", titulo: datos?.nombre ? <>Hola, <em>{datos.nombre}</em></> : <>Mis <em>cotizaciones</em></>, contenido: arriba, cantidad: lista.length }} />;
 }
 
-const RUTAS = { cliente: "/catalogo", interno: "/catalogo-interno" };
+const RUTAS = { cliente: "/catalogo-cliente", interno: "/catalogo-interno" };
 const API = { cliente: "/api/catalogo", interno: "/api/catalogo-interno" };
 const TITULOS = { cliente: "Catálogo cliente", interno: "Catálogo interno" };
 
