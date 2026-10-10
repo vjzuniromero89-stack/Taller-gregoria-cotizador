@@ -38,8 +38,27 @@ r=await worker.fetch(req('/api/catalogo-interno'),env);assert.equal(r.status,200
 globalThis.fetch=async()=>Response.json({message:'internal error'},{status:403});
 r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,503);assert.equal((await r.text()).includes('internal error'),false);
 globalThis.fetch=async(url)=>{assert.equal(new URL(url).pathname,'/rest/v1/configuracion');return Response.json([{valor:{nombre:'Taller',whatsapp:'+505 8888-8888',logo:'data:secreto'}}]);};
-r=await worker.fetch(req('/api/contacto'),env);assert.equal(r.status,200);const contacto=await r.json();assert.deepEqual(contacto,{nombre:'Taller',whatsapp:'50588888888'});
+r=await worker.fetch(req('/api/contacto'),env);assert.equal(r.status,200);const contacto=await r.json();assert.deepEqual(contacto,{nombre:'Taller',contacto:'',logo:'data:secreto',whatsapp:'50588888888'});
 globalThis.fetch=async()=>Response.json({message:'x'},{status:500});
-r=await worker.fetch(req('/api/contacto'),env);assert.deepEqual(await r.json(),{nombre:'',whatsapp:''});
+r=await worker.fetch(req('/api/contacto'),env);assert.deepEqual(await r.json(),{nombre:'',contacto:'',logo:'',whatsapp:''});
 console.log('Catálogo: paginación, campos públicos y errores verificados.');
-console.log('Contacto: solo nombre y WhatsApp, sin otros datos de la empresa.');
+console.log('Contacto: nombre, contacto, logo y WhatsApp de la empresa.');
+// Cotización enviada desde el catálogo: precios de la base, número siguiente y sin costos en la respuesta.
+let guardado=null;
+globalThis.fetch=async(url,init={})=>{const u=new URL(url);
+  if(u.pathname.endsWith('/productos')){assert.equal(u.searchParams.get('codigo'),'in.("A-1","NO")');return Response.json([{id:'p1',codigo:'A-1',nombre:'Máquina',cbm:0.5,peso:70,precio_cbm:550,precio_producto:1000,precio_venta:2000,foto:'/f.jpg'}]);}
+  if(init.method==='POST'){guardado=JSON.parse(init.body);return new Response(null,{status:201});}
+  return Response.json([{numero:'WEB-0004'}]);};
+const pedir=(body)=>worker.fetch(new Request('https://example.test/api/solicitudes',{method:'POST',body:JSON.stringify(body)}),env);
+r=await pedir({nombre:'Ana',telefono:'8888 7777',nota:'Managua',lineas:[{codigo:'A-1',cantidad:2,precio:1},{codigo:'NO',cantidad:1}]});
+assert.equal(r.status,201);const sol=(await r.json()).cotizacion;
+assert.equal(sol.numero,'WEB-0005');assert.equal(sol.total,4000);assert.equal(sol.lineas.length,1);assert.equal(sol.lineas[0].precio,2000);
+assert.equal(JSON.stringify(sol).includes('precioProducto'),false);assert.equal(JSON.stringify(sol).includes('precioCbm'),false);
+assert.equal(guardado.cliente,'Ana');assert.equal(guardado.total_final,4000);assert.equal(guardado.lineas[0].precioProducto,1000);
+assert.equal(guardado.totales.totalFlete,1100);assert.equal(guardado.totales.ganancia,900);assert.deepEqual(guardado.totales.contacto,{telefono:'8888 7777',nota:'Managua',origen:'catalogo'});
+for(const malo of [{nombre:'',telefono:'88887777',lineas:[{codigo:'A-1',cantidad:1}]},{nombre:'Ana',telefono:'123',lineas:[{codigo:'A-1',cantidad:1}]},{nombre:'Ana',telefono:'88887777',lineas:[]}]){r=await pedir(malo);assert.equal(r.status,400);}
+globalThis.fetch=async()=>Response.json([{id:guardado.id,numero:'CLI-0001',lineas:[],totales:{}}]);
+r=await worker.fetch(req('/api/solicitudes/'+guardado.id),env);assert.equal(r.status,404);
+globalThis.fetch=async()=>Response.json([guardado]);
+r=await worker.fetch(req('/api/solicitudes/'+guardado.id),env);assert.equal(r.status,200);assert.equal((await r.text()).includes('precioProducto'),false);
+console.log('Cotizaciones del catálogo: registro, numeración, validación y vista sin costos.');

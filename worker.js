@@ -34,6 +34,22 @@ async function sbRequest(env, path, init = {}) {
   return res.ok ? { ok: true, status: res.status, data } : { ok: false, status: res.status, error: data || text };
 }
 
+const KG_POR_CBM = 350;
+const MINIMO_CBM = 1; // el transporte cobra como mínimo 1 CBM por cada máquina
+const texto = (valor, maximo) => String(valor ?? "").replace(/\s+/g, " ").trim().slice(0, maximo);
+
+/** Lo que el cliente puede ver de su cotización: nunca costos ni flete. */
+function cotizacionPublica(fila) {
+  const contacto = fila.totales?.contacto || {};
+  return {
+    id: fila.id, numero: fila.numero, fecha: fila.fecha, cliente: fila.cliente || "",
+    telefono: contacto.telefono || "", nota: contacto.nota || "", total: Number(fila.total_final) || 0,
+    lineas: (Array.isArray(fila.lineas) ? fila.lineas : []).map((l) => ({
+      codigo: l.codigo, nombre: l.nombre, cantidad: Number(l.cantidad) || 0, precio: Number(l.precioVenta) || 0, foto: l.foto || "",
+    })),
+  };
+}
+
 const CATALOGOS = {
   "/api/catalogo": ["id", "codigo", "nombre", "descripcion", "categoria", "peso", "precio_venta", "foto"],
   "/api/catalogo-interno": ["id", "codigo", "nombre", "descripcion", "categoria", "cbm", "peso", "precio_cbm", "precio_producto", "precio_venta", "foto"],
@@ -65,7 +81,70 @@ export default {
     if (url.pathname === "/api/contacto" && request.method === "GET") {
       const r = await sbRequest(env, "configuracion?clave=eq.empresa&select=valor&limit=1");
       const valor = r.ok && Array.isArray(r.data) && r.data[0]?.valor && typeof r.data[0].valor === "object" ? r.data[0].valor : {};
-      return json({ nombre: String(valor.nombre || ""), whatsapp: String(valor.whatsapp || "").replace(/\D/g, "") });
+      return json({
+        nombre: String(valor.nombre || ""), contacto: String(valor.contacto || ""), logo: String(valor.logo || ""),
+        whatsapp: String(valor.whatsapp || "").replace(/\D/g, ""),
+      });
+    }
+
+    // El cliente envía su cotización desde el catálogo: se registra con precios tomados de la base de datos.
+    if (url.pathname === "/api/solicitudes" && request.method === "POST") {
+      let cuerpo;
+      try { cuerpo = await request.json(); } catch { return json({ ok: false, error: "JSON inválido" }, 400); }
+      const nombre = texto(cuerpo?.nombre, 80), telefono = texto(cuerpo?.telefono, 30), nota = texto(cuerpo?.nota, 300);
+      const pedidas = new Map();
+      for (const l of Array.isArray(cuerpo?.lineas) ? cuerpo.lineas.slice(0, 40) : []) {
+        const codigo = texto(l?.codigo, 60).replace(/["\\]/g, ""), cantidad = Math.floor(Number(l?.cantidad));
+        if (codigo && cantidad >= 1) pedidas.set(codigo, Math.min(99, cantidad));
+      }
+      if (!nombre || telefono.replace(/\D/g, "").length < 8 || !pedidas.size) {
+        return json({ ok: false, error: "Faltan el nombre, el teléfono o los equipos." }, 400);
+      }
+      const codigos = [...pedidas.keys()].map((c) => `"${c}"`).join(",");
+      const prod = await sbRequest(env, `productos?select=id,codigo,nombre,cbm,peso,precio_cbm,precio_producto,precio_venta,foto&codigo=in.(${encodeURIComponent(codigos)})`);
+      if (!prod.ok || !Array.isArray(prod.data)) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
+      const lineas = [];
+      for (const [codigo, cantidad] of pedidas) {
+        const p = prod.data.find((x) => x.codigo === codigo);
+        if (p) lineas.push({
+          id: crypto.randomUUID(), productId: p.id, codigo: p.codigo, nombre: p.nombre, foto: p.foto || "",
+          cbm: Number(p.cbm) || 0, peso: Number(p.peso) || 0, minimoCbm: MINIMO_CBM, precioCbm: Number(p.precio_cbm) || 0,
+          precioProducto: Number(p.precio_producto) || 0, precioVenta: Number(p.precio_venta) || 0, cantidad,
+        });
+      }
+      if (!lineas.length) return json({ ok: false, error: "Esos equipos ya no están en el catálogo." }, 400);
+
+      const ultima = await sbRequest(env, "cotizaciones_clientes?select=numero&numero=like.WEB-*&order=numero.desc&limit=1");
+      if (!ultima.ok) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
+      const siguiente = (parseInt(String(ultima.data?.[0]?.numero || "").split("-")[1], 10) || 0) + 1;
+      const t = { totalCantidad: 0, totalCbm: 0, totalPeso: 0, totalProducto: 0, totalCosto: 0, totalFlete: 0, totalVenta: 0 };
+      for (const l of lineas) {
+        const cobrable = Math.max(l.cbm, l.peso / KG_POR_CBM, MINIMO_CBM);
+        t.totalCantidad += l.cantidad; t.totalCbm += cobrable * l.cantidad; t.totalPeso += l.peso * l.cantidad;
+        t.totalProducto += l.precioProducto * l.cantidad; t.totalFlete += cobrable * l.precioCbm * l.cantidad;
+        t.totalVenta += l.precioVenta * l.cantidad;
+      }
+      t.totalCosto = t.totalProducto + t.totalFlete;
+      t.ganancia = t.totalVenta - t.totalCosto;
+      t.margen = t.totalVenta > 0 ? t.ganancia / t.totalVenta : 0;
+      const fila = {
+        id: crypto.randomUUID(), numero: `WEB-${String(siguiente).padStart(4, "0")}`, fecha: new Date().toISOString(), cliente: nombre,
+        descuento: 0, descuento_monto: 0, total_final: t.totalVenta, lineas,
+        totales: { ...t, contacto: { telefono, nota, origen: "catalogo" } },
+      };
+      const guardada = await sbRequest(env, "cotizaciones_clientes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(fila) });
+      if (!guardada.ok) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
+      return json({ ok: true, cotizacion: cotizacionPublica(fila) }, 201);
+    }
+
+    // Una cotización enviada desde el catálogo, sin costos, para verla con su enlace.
+    const idSolicitud = request.method === "GET" && url.pathname.match(/^\/api\/solicitudes\/([0-9a-f-]{36})$/)?.[1];
+    if (idSolicitud) {
+      const r = await sbRequest(env, `cotizaciones_clientes?id=eq.${idSolicitud}&select=id,numero,fecha,cliente,total_final,lineas,totales&limit=1`);
+      if (!r.ok) return json({ ok: false, error: "No se pudo cargar la cotización." }, 503);
+      const fila = Array.isArray(r.data) ? r.data[0] : null;
+      if (!fila || fila.totales?.contacto?.origen !== "catalogo") return json({ ok: false, error: "No existe." }, 404);
+      return json({ ok: true, cotizacion: cotizacionPublica(fila) });
     }
 
     // Catálogo para clientes: solo precio de venta, nunca costos. Catálogo interno: costos, flete y CBM.

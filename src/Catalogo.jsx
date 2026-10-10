@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList } from "lucide-react";
 import { LOGO_POR_DEFECTO } from "./logo.js";
+import { hojaImagen } from "./hoja.js";
 import { leerDescripcion } from "./descripcion.js";
 import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 
@@ -217,8 +218,11 @@ const ESTILOS = `
 .cat-enviar { background:#128C4A; padding:12px 18px; }
 .cat-enviar:hover { background:#0E6F3B; }
 .cat-nota-envio { font-size:13px; color:#5B6B75; text-align:right; margin:8px 0 0; }
-.cat-enviado { color:#134650; }
-.cat-enviado p { font-size:16px; line-height:1.5; margin:8px 0 0; }
+.cat-panel-ancho { max-width:860px; }
+.cat-guardada { display:flex; align-items:center; gap:8px; color:#1D7A46; font-weight:600; font-size:16px; margin:0 0 12px; }
+.cat-hoja-img { display:block; width:100%; height:auto; border:1px solid #D5DEE3; border-radius:10px; box-shadow:0 6px 22px rgba(20,34,43,.12); background:#fff; }
+.cat-vista { background:#fff; border:1px solid #D5DEE3; border-radius:16px; padding:18px; }
+a.cat-btn { text-decoration:none; }
 @media (max-width:560px) {
   .cat-panel-in { padding:20px 16px; }
   .cat-campos { grid-template-columns:1fr; }
@@ -560,20 +564,6 @@ export const numeroWhatsapp = (texto) => {
   return d.length === 8 ? `505${d}` : d.length >= 10 ? d : "";
 };
 
-export function mensajeCotizacion({ nombre, telefono, nota, lineas, total, hayConsultar }) {
-  return [
-    "*Solicitud de cotización*",
-    `Cliente: ${nombre}`,
-    `Teléfono: ${telefono}`,
-    "",
-    ...lineas.map((l) => `• ${l.cantidad} × ${l.codigo} · ${l.nombre}: ${l.venta > 0 ? `${dinero(l.venta)} c/u` : "precio por consultar"}`),
-    ...(total > 0 ? ["", `Total${hayConsultar ? " (sin los equipos por consultar)" : ""}: ${dinero(total)}`] : []),
-    ...(nota ? ["", `Nota: ${nota}`] : []),
-    "",
-    "Enviado desde el catálogo de Taller Gregoriana",
-  ].join("\n");
-}
-
 function Cantidad({ codigo, cantidad, cambiar, completo }) {
   if (!cantidad) {
     return (
@@ -593,11 +583,118 @@ function Cantidad({ codigo, cantidad, cambiar, completo }) {
   );
 }
 
-function PanelCotizacion({ lineas, cambiar, vaciar, whatsapp, cerrar }) {
+const EMPRESA_PUBLICA = { nombre: "Taller Gregoriana", contacto: "Taller Mecánico y Lubricentro", logo: LOGO_POR_DEFECTO, whatsapp: "" };
+
+/** Nombre, contacto, logo y WhatsApp del taller para el catálogo de clientes y sus cotizaciones. */
+function useEmpresaPublica(activo) {
+  const [empresa, setEmpresa] = useState(EMPRESA_PUBLICA);
+  useEffect(() => {
+    if (!activo) return;
+    let vivo = true;
+    fetch("/api/contacto", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (vivo && d) setEmpresa({
+        nombre: d.nombre || EMPRESA_PUBLICA.nombre, contacto: d.contacto || EMPRESA_PUBLICA.contacto,
+        logo: d.logo || EMPRESA_PUBLICA.logo, whatsapp: numeroWhatsapp(d.whatsapp),
+      });
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [activo]);
+  return empresa;
+}
+
+/** Hoja de cotización que ve el cliente: equipos, cantidades y precios de venta. */
+function datosHojaCliente(cot, empresa) {
+  const columnas = [
+    { t: "Foto" }, { t: "Equipo" }, { t: "Cant.", r: true }, { t: "Precio unitario", r: true }, { t: "Total", r: true, fuerte: true },
+  ];
+  const filas = cot.lineas.map((l) => ({
+    foto: l.foto, nombre: l.nombre, sub: l.codigo,
+    valores: [String(l.cantidad), l.precio > 0 ? dinero(l.precio) : "Por consultar", l.precio > 0 ? dinero(l.precio * l.cantidad) : "Por consultar"],
+  }));
+  const totales = [["Equipos", String(cot.lineas.reduce((s, l) => s + l.cantidad, 0))]];
+  if (cot.lineas.some((l) => !(l.precio > 0))) totales.push(["Equipos por consultar", "No incluidos en el total"]);
+  return {
+    empresa, columnas, filas, totales, total: dinero(cot.total), totalLabel: "Total",
+    pie: "Precios en dólares estadounidenses.",
+    cot: { numero: cot.numero, fecha: cot.fecha, cliente: [cot.cliente, cot.telefono && `Tel. ${cot.telefono}`].filter(Boolean).join(" · ") },
+  };
+}
+
+/** Dibuja la hoja de la cotización como imagen PNG. */
+function useImagenCotizacion(cot, empresa) {
+  const [imagen, setImagen] = useState(null);
+  useEffect(() => {
+    if (!cot) { setImagen(null); return; }
+    let vivo = true, url = "";
+    (async () => {
+      try {
+        const lienzo = await hojaImagen(datosHojaCliente(cot, empresa));
+        const blob = await new Promise((r) => lienzo.toBlob(r, "image/png"));
+        if (!vivo || !blob) return;
+        url = URL.createObjectURL(blob);
+        setImagen({ url, blob });
+      } catch (e) { console.error(e); if (vivo) setImagen({ error: true }); }
+    })();
+    return () => { vivo = false; if (url) URL.revokeObjectURL(url); };
+  }, [cot, empresa]);
+  return imagen;
+}
+
+async function compartirImagen(imagen, numero) {
+  const archivo = new File([imagen.blob], `Cotizacion-${numero}.png`, { type: "image/png" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) { await navigator.share({ files: [archivo], title: `Cotización ${numero}` }); return; }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  const a = document.createElement("a");
+  a.href = imagen.url; a.download = archivo.name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+const enlaceCotizacion = (cot) => `${window.location.origin}/cotizacion/${cot.id}`;
+const enlaceWhatsapp = (cot, whatsapp) => `https://wa.me/${whatsapp}?text=${encodeURIComponent([
+  `*Cotización ${cot.numero}*`,
+  `Cliente: ${cot.cliente}`,
+  `Teléfono: ${cot.telefono}`,
+  ...(cot.total > 0 ? [`Total: ${dinero(cot.total)}`] : []),
+  ...(cot.nota ? [`Nota: ${cot.nota}`] : []),
+  "",
+  "Ver la cotización:",
+  enlaceCotizacion(cot),
+].join("\n"))}`;
+
+/** La cotización ya guardada: su imagen y los botones para enviarla. */
+function CotizacionLista({ cot, empresa, alTerminar }) {
+  const imagen = useImagenCotizacion(cot, empresa);
+  return (
+    <div className="cat-lista-ok">
+      {alTerminar && <p className="cat-guardada" role="status"><Check size={18} />Tu cotización <b>{cot.numero}</b> quedó registrada.</p>}
+      {!imagen ? <p className="cat-resumen">Preparando la imagen…</p> :
+        imagen.error ? <p className="cat-error">No se pudo dibujar la imagen, pero tu cotización sí quedó registrada.</p> :
+          <img className="cat-hoja-img" src={imagen.url} alt={`Cotización ${cot.numero} de ${cot.cliente}`} />}
+      <div className="cat-panel-botones">
+        {imagen?.blob && (
+          <button type="button" className="cat-btn claro" onClick={() => compartirImagen(imagen, cot.numero)}>
+            <Share2 size={17} />Compartir o guardar la imagen
+          </button>
+        )}
+        {empresa.whatsapp && (
+          <a className="cat-btn cat-enviar" href={enlaceWhatsapp(cot, empresa.whatsapp)} target="_blank" rel="noopener noreferrer">
+            <Send size={17} />Enviar al taller por WhatsApp
+          </a>
+        )}
+      </div>
+      {empresa.whatsapp && <p className="cat-nota-envio">Se abrirá WhatsApp con el chat del taller. Solo tienes que tocar “Enviar”.</p>}
+      {alTerminar && <div className="cat-panel-botones"><button type="button" className="cat-btn claro" onClick={alTerminar}>Listo</button></div>}
+    </div>
+  );
+}
+
+function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar }) {
   const [datos, setDatos] = useState(() => leerGuardado(`${CLAVE_PEDIDO}-datos`, { nombre: "", telefono: "" }));
   const [nota, setNota] = useState("");
   const [error, setError] = useState("");
-  const [enviado, setEnviado] = useState(false);
+  const [trabajando, setTrabajando] = useState(false);
+  const [creada, setCreada] = useState(null);
   useEffect(() => {
     const tecla = (e) => { if (e.key === "Escape") cerrar(); };
     const previo = document.body.style.overflow;
@@ -610,37 +707,39 @@ function PanelCotizacion({ lineas, cambiar, vaciar, whatsapp, cerrar }) {
   const hayConsultar = lineas.some((l) => l.venta <= 0);
   const set = (k) => (e) => setDatos((d) => ({ ...d, [k]: e.target.value }));
 
-  const enviar = (e) => {
+  const crear = async (e) => {
     e.preventDefault();
+    if (trabajando) return;
     const nombre = datos.nombre.trim(), telefono = datos.telefono.trim();
     if (!nombre) { setError("Escribe tu nombre."); return; }
     if (telefono.replace(/\D/g, "").length < 8) { setError("Escribe tu número de teléfono completo."); return; }
-    setError("");
+    setError(""); setTrabajando(true);
     guardarLocal(`${CLAVE_PEDIDO}-datos`, { nombre, telefono });
-    const texto = mensajeCotizacion({ nombre, telefono, nota: nota.trim(), lineas, total, hayConsultar });
-    window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(texto)}`, "_blank", "noopener");
-    setEnviado(true);
+    try {
+      const res = await fetch("/api/solicitudes", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nombre, telefono, nota: nota.trim(), lineas: lineas.map((l) => ({ codigo: l.codigo, cantidad: l.cantidad })) }),
+      });
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok || !r.cotizacion) throw new Error(r.error || "sin respuesta");
+      setCreada(r.cotizacion);
+      vaciar();
+    } catch (err) {
+      console.error(err);
+      setError("No pudimos registrar tu cotización. Revisa tu conexión e inténtalo de nuevo.");
+    } finally { setTrabajando(false); }
   };
 
   return (
     <div className="cat-fondo" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrar(); }}>
-      <section className="cat-ficha cat-panel" role="dialog" aria-modal="true" aria-label="Mi cotización">
+      <section className={`cat-ficha cat-panel${creada ? " cat-panel-ancho" : ""}`} role="dialog" aria-modal="true" aria-label="Mi cotización">
         <button type="button" className="cat-cerrar" onClick={cerrar} aria-label="Cerrar mi cotización"><X size={20} /></button>
         <div className="cat-panel-in">
-          <h2 className="cat-cond">Mi cotización</h2>
-          {enviado ? (
-            <div className="cat-enviado" role="status">
-              <Check size={28} />
-              <p><b>Se abrió WhatsApp con tu cotización.</b> Toca “Enviar” en WhatsApp para que la recibamos.</p>
-              <div className="cat-panel-botones">
-                <button type="button" className="cat-btn claro" onClick={() => setEnviado(false)}>Volver a mi cotización</button>
-                <button type="button" className="cat-btn" onClick={() => { vaciar(); cerrar(); }}>Listo, vaciar mi cotización</button>
-              </div>
-            </div>
-          ) : !lineas.length ? (
+          <h2 className="cat-cond">{creada ? `Cotización ${creada.numero}` : "Mi cotización"}</h2>
+          {creada ? <CotizacionLista cot={creada} empresa={empresa} alTerminar={cerrar} /> : !lineas.length ? (
             <p className="cat-resumen">Todavía no has agregado equipos. Toca “Agregar a mi cotización” en los equipos que te interesan.</p>
           ) : (
-            <form onSubmit={enviar} noValidate>
+            <form onSubmit={crear} noValidate>
               <ul className="cat-lineas">
                 {lineas.map((l) => (
                   <li key={l.codigo}>
@@ -665,25 +764,65 @@ function PanelCotizacion({ lineas, cambiar, vaciar, whatsapp, cerrar }) {
               )}
               <div className="cat-campos">
                 <label>Tu nombre
-                  <input value={datos.nombre} onChange={set("nombre")} autoComplete="name" />
+                  <input value={datos.nombre} onChange={set("nombre")} autoComplete="name" maxLength={80} />
                 </label>
                 <label>Tu teléfono o WhatsApp
-                  <input value={datos.telefono} onChange={set("telefono")} inputMode="tel" autoComplete="tel" placeholder="8888 8888" />
+                  <input value={datos.telefono} onChange={set("telefono")} inputMode="tel" autoComplete="tel" placeholder="8888 8888" maxLength={30} />
                 </label>
                 <label className="ancho">Nota (opcional)
-                  <textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ciudad, fecha en que lo necesitas, preguntas" />
+                  <textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)} maxLength={300} placeholder="Ciudad, fecha en que lo necesitas, preguntas" />
                 </label>
               </div>
               {error && <p className="cat-error" role="alert">{error}</p>}
               <div className="cat-panel-botones">
-                <button type="button" className="cat-btn claro" onClick={vaciar}>Vaciar</button>
-                <button type="submit" className="cat-btn cat-enviar"><Send size={17} />Enviar cotización por WhatsApp</button>
+                <button type="button" className="cat-btn claro" onClick={vaciar} disabled={trabajando}>Vaciar</button>
+                <button type="submit" className="cat-btn cat-enviar" disabled={trabajando}>
+                  <ClipboardList size={17} />{trabajando ? "Creando tu cotización…" : "Crear mi cotización"}
+                </button>
               </div>
-              <p className="cat-nota-envio">Se abrirá WhatsApp con el mensaje listo. Solo tienes que tocar “Enviar”.</p>
+              <p className="cat-nota-envio">Verás tu cotización como imagen y podrás enviarla al taller por WhatsApp.</p>
             </form>
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+/** Página pública de una cotización ya enviada: /cotizacion/<id>. */
+export function VistaCotizacion({ id }) {
+  const empresa = useEmpresaPublica(true);
+  const [cot, setCot] = useState(null);
+  const [estado, setEstado] = useState("cargando");
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/solicitudes/${encodeURIComponent(id)}`, { cache: "no-store" }).then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (!vivo) return;
+      if (r.ok && d.cotizacion) { setCot(d.cotizacion); setEstado("lista"); } else setEstado(r.status === 404 ? "no-existe" : "error");
+    }).catch(() => { if (vivo) setEstado("error"); });
+    return () => { vivo = false; };
+  }, [id]);
+  const sinWhatsapp = useMemo(() => ({ ...empresa, whatsapp: "" }), [empresa]);
+  return (
+    <div className="cat">
+      <style>{ESTILOS}</style>
+      <header className="cat-top">
+        <div className="cat-wrap cat-top-in">
+          <div className="cat-marca">
+            <img src={empresa.logo} alt="" />
+            <div><b>{empresa.nombre}</b><span>{empresa.contacto.split("\n")[0]}</span></div>
+          </div>
+          <h1>{cot ? <>Cotización <em>{cot.numero}</em></> : "Cotización"}</h1>
+        </div>
+      </header>
+      <main className="cat-wrap" style={{ paddingTop: 22, paddingBottom: 48, maxWidth: 980 }}>
+        {estado === "cargando" ? <p className="cat-cuenta" role="status">Cargando la cotización…</p> :
+          estado === "no-existe" ? <div className="cat-vacio">Esta cotización ya no existe.</div> :
+            estado === "error" ? <div className="cat-vacio">No pudimos cargar la cotización. Inténtalo de nuevo en un momento.</div> :
+              <div className="cat-vista"><CotizacionLista cot={cot} empresa={sinWhatsapp} /></div>}
+        <p style={{ marginTop: 18 }}><a className="cat-btn claro" href="/catalogo" style={{ textDecoration: "none" }}>Ver el catálogo</a></p>
+      </main>
     </div>
   );
 }
@@ -751,16 +890,10 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
   const sinPrecio = productos.filter((p) => p.venta <= 0).length;
 
   // Cotización del cliente: solo en el catálogo público de clientes y si el taller configuró su WhatsApp.
-  const [whatsapp, setWhatsapp] = useState("");
+  const empresa = useEmpresaPublica(!dentro && modo === "cliente");
+  const whatsapp = empresa.whatsapp;
   const [pedido, setPedido] = useState(() => leerGuardado(CLAVE_PEDIDO, {}));
   const [panel, setPanel] = useState(false);
-  useEffect(() => {
-    if (dentro || modo !== "cliente") return;
-    let vivo = true;
-    fetch("/api/contacto", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (vivo && d) setWhatsapp(numeroWhatsapp(d.whatsapp)); }).catch(() => {});
-    return () => { vivo = false; };
-  }, [dentro, modo]);
   const cambiarPedido = useMemo(() => (codigo, cantidad) => setPedido((actual) => {
     const nuevo = { ...actual };
     if (cantidad > 0) nuevo[codigo] = Math.min(99, cantidad); else delete nuevo[codigo];
@@ -842,14 +975,14 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
 
       {seleccionado && <Ficha p={seleccionado} modo={modo} cerrar={cerrar} pedir={pedir} />}
 
-      {pedir && unidades > 0 && !panel && (
+      {pedir && unidades > 0 && !panel && !seleccionado && (
         <button type="button" className="cat-flotante" onClick={() => setPanel(true)}>
           <ClipboardList size={20} />
           <span>Mi cotización · {unidades} {unidades === 1 ? "equipo" : "equipos"}</span>
           <b>Ver y enviar</b>
         </button>
       )}
-      {pedir && panel && <PanelCotizacion lineas={lineas} cambiar={cambiarPedido} vaciar={vaciarPedido} whatsapp={whatsapp} cerrar={cerrarPanel} />}
+      {pedir && panel && <PanelCotizacion lineas={lineas} cambiar={cambiarPedido} vaciar={vaciarPedido} empresa={empresa} cerrar={cerrarPanel} />}
     </div>
   );
 }
