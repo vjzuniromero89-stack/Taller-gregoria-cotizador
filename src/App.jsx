@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Camera, Image as ImageIcon, Pencil, Trash2, X, Plus, Search, FileText,
   Printer, Share2, Eye, Home, Package, FileText as FileTextIcon, Users, Menu,
-  TrendingUp, DollarSign, Ship, Cloud, CloudOff, BookOpen, Tag, Contact,
+  TrendingUp, DollarSign, Ship, Cloud, CloudOff, BookOpen, Tag, Contact, ChevronDown,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { LOGO_POR_DEFECTO } from "./logo.js";
@@ -78,6 +78,16 @@ const STYLES = `
 .tabla-ganancias tbody th { font-weight:500; }
 .tabla-ganancias tbody th b { display:block; } .tabla-ganancias tbody th span { display:block; font-size:12.5px; color:#5B6B75; }
 .tabla-ganancias td:nth-child(2) { text-align:left; }
+.fila-cot { cursor:pointer; }
+.fila-cot:hover, .fila-cot.abierta { background:#F3F6F7; }
+.fila-cot th, .fila-maquina th { display:flex; align-items:center; gap:8px; }
+.ver-maquinas { flex-shrink:0; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#1B5E6B; background:#E4EFF1; transition:transform .15s; }
+.ver-maquinas:focus-visible { outline:3px solid #F2B705; outline-offset:2px; }
+.fila-cot.abierta .ver-maquinas { transform:rotate(180deg); }
+.fila-maquina { background:#FBFCFC; font-size:13.5px; }
+.fila-maquina th { padding-left:50px !important; }
+.fila-maquina td, .fila-maquina th { border-top:1px dashed #E1E7EA !important; color:#314551; }
+.fila-maquina td:nth-child(2) { font-size:12.5px; color:#5B6B75; }
 .enlace { color:#1B5E6B; font-weight:600; text-decoration:underline; padding:0; }
 .resumen-ganancia { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
 .resumen-ganancia > div { background:#fff; border:1px solid #CAD4DA; border-radius:12px; padding:14px 16px; }
@@ -553,6 +563,17 @@ const desgloseDe = (c) => {
   return { venta, producto: t.totalProducto, flete: t.totalFlete, comision, ganancia, margen: venta > 0 ? ganancia / venta : 0 };
 };
 const gananciaDeCliente = (c) => desgloseDe(c).ganancia;
+// La misma cuenta, máquina por máquina. El descuento de la cotización se reparte en proporción a la venta de cada una.
+const desglosePorLinea = (c) => {
+  const bruto = calcTotalesCliente(c.lineas).totalVenta;
+  const factor = bruto > 0 ? totalDeCliente(c) / bruto : 1;
+  return c.lineas.map((l) => {
+    const k = calcCliente(l);
+    const venta = k.totalVenta * factor, comision = k.totalCosto * COMISION;
+    const ganancia = venta - k.totalCosto - comision;
+    return { l, cantidad: num(l.cantidad), venta, producto: k.totalProducto, flete: k.totalFlete, comision, ganancia, margen: venta > 0 ? ganancia / venta : 0 };
+  });
+};
 const pagadoDe = (c) => (c?.totales?.pagos || []).reduce((suma, p) => suma + num(p.monto), 0);
 const soloFecha = (d) => new Date(d).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" });
 // Entrega estimada: la fecha de confirmación más los días de producción y de envío.
@@ -2426,6 +2447,7 @@ function ClientesView({ clientes, fichas, guardarFichas, avisar, vistaCotizacion
 function GananciasView({ clientes }) {
   const [periodo, setPeriodo] = useState("");
   const [verPendientes, setVerPendientes] = useState(false);
+  const [abierta, setAbierta] = useState(null);
   const mesDe = (iso) => String(iso || "").slice(0, 7);
   const nombreMes = (clave) => {
     const [a, m] = clave.split("-").map(Number);
@@ -2532,7 +2554,7 @@ function GananciasView({ clientes }) {
 
       <section>
         <div className="section-toolbar">
-          <h2 className="cond text-2xl font-semibold">Por cotización</h2>
+          <h2 className="cond text-2xl font-semibold">Por cotización <span className="muted font-medium text-base">· toca una para ver cada máquina</span></h2>
           <div className="filtro-estado" style={{ marginBottom: 0 }} role="group" aria-label="Qué cotizaciones ver">
             <button type="button" aria-pressed={!verPendientes} onClick={() => setVerPendientes(false)}>Confirmadas ({delPeriodo.length})</button>
             <button type="button" aria-pressed={verPendientes} onClick={() => setVerPendientes(true)}>Pendientes ({pendientes.length})</button>
@@ -2547,15 +2569,34 @@ function GananciasView({ clientes }) {
             <table className="num">
               <thead><tr><th>Cotización</th><th>Estado</th><th>Venta</th><th>Producto</th><th>Flete</th><th>Comisión</th><th>Ganancia</th><th>Margen</th><th>Pagado</th><th>Saldo</th></tr></thead>
               <tbody>
-                {visibles.map((f) => (
-                  <tr key={f.c.id}>
-                    <th scope="row"><b>{f.c.numero}</b><span>{f.c.cliente || "Sin cliente"} · {soloFecha(f.fechaVenta)}</span></th>
-                    <td><ChipEstado estado={estadoDe(f.c)} /></td>
-                    <td>{money(f.venta)}</td><td>{money(f.producto)}</td><td>{money(f.flete)}</td><td>{money(f.comision)}</td>
-                    <td className={f.ganancia >= 0 ? "pos" : "neg"}><b>{money(f.ganancia)}</b></td><td>{f.venta > 0 ? pct(f.margen) : "—"}</td>
-                    <td>{money(f.pagado)}</td><td>{money(Math.max(0, f.venta - f.pagado))}</td>
-                  </tr>
-                ))}
+                {visibles.map((f) => {
+                  const detalle = abierta === f.c.id;
+                  return [
+                    <tr key={f.c.id} className={`fila-cot ${detalle ? "abierta" : ""}`} onClick={() => setAbierta(detalle ? null : f.c.id)}>
+                      <th scope="row">
+                        <button type="button" className="ver-maquinas" aria-expanded={detalle}
+                          aria-label={`${detalle ? "Ocultar" : "Ver"} la ganancia por máquina de ${f.c.numero}`}
+                          onClick={(e) => { e.stopPropagation(); setAbierta(detalle ? null : f.c.id); }}>
+                          <ChevronDown size={18} />
+                        </button>
+                        <div><b>{f.c.numero}</b><span>{f.c.cliente || "Sin cliente"} · {soloFecha(f.fechaVenta)}</span></div>
+                      </th>
+                      <td><ChipEstado estado={estadoDe(f.c)} /></td>
+                      <td>{money(f.venta)}</td><td>{money(f.producto)}</td><td>{money(f.flete)}</td><td>{money(f.comision)}</td>
+                      <td className={f.ganancia >= 0 ? "pos" : "neg"}><b>{money(f.ganancia)}</b></td><td>{f.venta > 0 ? pct(f.margen) : "—"}</td>
+                      <td>{money(f.pagado)}</td><td>{money(Math.max(0, f.venta - f.pagado))}</td>
+                    </tr>,
+                    ...(detalle ? desglosePorLinea(f.c).map((d) => (
+                      <tr key={`${f.c.id}-${d.l.id}`} className="fila-maquina">
+                        <th scope="row"><div><b>{d.cantidad} × {d.l.codigo}</b><span>{d.l.nombre}</span></div></th>
+                        <td>{d.cantidad > 1 ? `${money(d.ganancia / d.cantidad)} c/u` : ""}</td>
+                        <td>{money(d.venta)}</td><td>{money(d.producto)}</td><td>{money(d.flete)}</td><td>{money(d.comision)}</td>
+                        <td className={d.ganancia >= 0 ? "pos" : "neg"}><b>{money(d.ganancia)}</b></td><td>{d.venta > 0 ? pct(d.margen) : "—"}</td>
+                        <td></td><td></td>
+                      </tr>
+                    )) : []),
+                  ];
+                })}
               </tbody>
             </table>
           </div>
