@@ -1,4 +1,5 @@
 /* Hoja de cotización dibujada como imagen. La usan la app y el catálogo de clientes. */
+import { T, IDIOMA } from "./idioma.js";
 export const KG_POR_CBM = 350;
 
 // Tiempos que se le informan al cliente en cada cotización.
@@ -12,8 +13,8 @@ export const TIEMPOS_ENTREGA = [
 
 export const fecha = (iso) => {
   const d = new Date(iso);
-  return d.toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" }) + ", " +
-    d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(IDIOMA, { day: "2-digit", month: "short", year: "numeric" }) + ", " +
+    d.toLocaleTimeString(IDIOMA, { hour: "2-digit", minute: "2-digit" });
 };
 
 export const PIE_TEXTO = (interno) =>
@@ -78,7 +79,7 @@ export async function hojaImagen(d) {
     ctx.drawImage(logo, M, y, Math.min(anchoLogo, 260), altoLogo);
     y += altoLogo + 14;
   }
-  ctx.fillStyle = "#14222B"; ctx.font = `bold 30px ${F}`; ctx.textAlign = "left";
+  ctx.fillStyle = "#0A1F44"; ctx.font = `bold 30px ${F}`; ctx.textAlign = "left";
   ctx.fillText(empresa.nombre || "Cotización", M, y + 24);
   let yIzq = y + 24;
   if (empresa.contacto) {
@@ -88,8 +89,8 @@ export async function hojaImagen(d) {
   }
 
   ctx.textAlign = "right";
-  ctx.fillStyle = "#14222B"; ctx.font = `bold 32px ${F}`;
-  ctx.fillText("COTIZACIÓN", W - M, yTop + 30);
+  ctx.fillStyle = "#0A1F44"; ctx.font = `bold 32px ${F}`;
+  ctx.fillText(T("COTIZACIÓN"), W - M, yTop + 30);
   ctx.font = `bold 22px ${F}`;
   ctx.fillText(cot.numero, W - M, yTop + 60);
   ctx.fillStyle = "#5B6B75"; ctx.font = `15px ${F}`;
@@ -102,16 +103,16 @@ export async function hojaImagen(d) {
   }
 
   const yLinea = Math.max(yIzq + 16, yTop + (interno ? 136 : 104));
-  ctx.fillStyle = "#14222B"; ctx.fillRect(M, yLinea, W - M * 2, 4);
+  ctx.fillStyle = "#0A1F44"; ctx.fillRect(M, yLinea, W - M * 2, 4);
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#5B6B75"; ctx.font = `13px ${F}`;
-  ctx.fillText("CLIENTE", M, yLinea + 30);
-  ctx.fillStyle = "#14222B"; ctx.font = `bold 20px ${F}`;
-  ctx.fillText(cot.cliente || "Sin cliente", M, yLinea + 56);
+  ctx.fillText(T("CLIENTE"), M, yLinea + 30);
+  ctx.fillStyle = "#0A1F44"; ctx.font = `bold 20px ${F}`;
+  ctx.fillText(cot.cliente || T("Sin cliente"), M, yLinea + 56);
 
   let yT = yLinea + 84;
-  ctx.fillStyle = "#14222B"; ctx.fillRect(M, yT, W - M * 2, 38);
+  ctx.fillStyle = "#0A1F44"; ctx.fillRect(M, yT, W - M * 2, 38);
   ctx.fillStyle = "#FFFFFF"; ctx.font = `bold 13px ${F}`;
   ctx.fillText(columnas[0].t.toUpperCase(), xFoto + 10, yT + 25);
   ctx.fillText(columnas[1].t.toUpperCase(), xProd, yT + 25);
@@ -130,7 +131,7 @@ export async function hojaImagen(d) {
       ctx.strokeStyle = "#E1E7EA"; ctx.lineWidth = 1; ctx.strokeRect(ix + .5, iy + .5, lado, lado);
     }
     ctx.textAlign = "left";
-    ctx.fillStyle = "#14222B"; ctx.font = `bold 17px ${F}`;
+    ctx.fillStyle = "#0A1F44"; ctx.font = `bold 17px ${F}`;
     const nombre = envolver(ctx, f.nombre, anchoProd - 12)[0] || "";
     ctx.fillText(nombre, xProd, yF + 34);
     ctx.fillStyle = "#5B6B75"; ctx.font = `13px ${F}`;
@@ -138,7 +139,7 @@ export async function hojaImagen(d) {
     ctx.textAlign = "right";
     f.valores.forEach((v, i) => {
       const col = columnas[i + 2];
-      ctx.fillStyle = "#14222B";
+      ctx.fillStyle = "#0A1F44";
       ctx.font = `${col.fuerte ? "bold " : ""}16px ${F}`;
       ctx.fillText(v, xNum(i) + ANCHO_NUM - 10, yF + 45);
     });
@@ -156,15 +157,15 @@ export async function hojaImagen(d) {
     }
     ctx.textAlign = "left"; ctx.fillStyle = "#5B6B75"; ctx.font = `15px ${F}`;
     ctx.fillText(k, xCaja + 12, yC + 23);
-    ctx.textAlign = "right"; ctx.fillStyle = "#14222B"; ctx.font = `bold 15px ${F}`;
+    ctx.textAlign = "right"; ctx.fillStyle = "#0A1F44"; ctx.font = `bold 15px ${F}`;
     ctx.fillText(v, W - M - 12, yC + 23);
     yC += 34;
   });
   yC += 10;
-  ctx.fillStyle = "#14222B"; ctx.fillRect(xCaja, yC, anchoCaja, 62);
+  ctx.fillStyle = "#0A1F44"; ctx.fillRect(xCaja, yC, anchoCaja, 62);
   ctx.textAlign = "left"; ctx.fillStyle = "#AFC0C8"; ctx.font = `bold 14px ${F}`;
   ctx.fillText(totalLabel.toUpperCase(), xCaja + 16, yC + 38);
-  ctx.textAlign = "right"; ctx.fillStyle = "#F2B705"; ctx.font = `bold 30px ${F}`;
+  ctx.textAlign = "right"; ctx.fillStyle = "#FF8A1F"; ctx.font = `bold 30px ${F}`;
   ctx.fillText(total, W - M - 16, yC + 42);
 
   let yP = yC + 62 + 40;

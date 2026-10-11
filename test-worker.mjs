@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import worker from './worker.js';
-const env = { SUPABASE_URL: 'https://vhlwxvzieitgcwxmngua.supabase.co', SUPABASE_ANON_KEY: 'test-anon' };
-const req = (path, method='GET', body) => new Request('https://example.com'+path,{method,...(body ? {body:JSON.stringify(body)} : {})});
+const env = { SUPABASE_URL: 'https://atltdrpxseildyvfeltq.supabase.co', SUPABASE_ANON_KEY: 'test-anon' };
+const req = (path, method='GET', body, token='sesion-de-prueba') => new Request('https://example.com'+path,{method,...(token ? {headers:{authorization:'Bearer '+token}} : {}),...(body ? {body:JSON.stringify(body)} : {})});
 let r = await worker.fetch(req('/api/productos','PUT',[{id:'test'}]),{});
 assert.equal(r.status,503); assert.match((await r.json()).error,/SUPABASE_URL/);
 r = await worker.fetch(req('/api/health'),{}); assert.equal((await r.json()).ok,false);
@@ -15,7 +15,7 @@ r=await worker.fetch(req('/api/productos','PUT',[{id:'test'}]),env); assert.equa
 globalThis.fetch=async()=>{throw new Error('network');};
 r=await worker.fetch(req('/api/productos','PUT',[{id:'test'}]),env); assert.equal(r.status,502);
 globalThis.fetch=async(url,init)=>{assert.equal(init.headers.authorization,undefined);assert.equal(init.headers.apikey,'sb_publishable_test');return Response.json([]);};
-r=await worker.fetch(req('/api/productos'),{...env,SUPABASE_ANON_KEY:'sb_publishable_test'}); assert.equal(r.status,200);
+r=await worker.fetch(req('/api/catalogo'),{...env,SUPABASE_ANON_KEY:'sb_publishable_test'}); assert.equal(r.status,200);
 console.log('8 comprobaciones correctas (Supabase simulado; sin modificar datos reales).');
 // Deletion regression checks: selected row only, final row, denied access, zero affected rows.
 rows=[{id:'one'},{id:'two'}];
@@ -31,7 +31,7 @@ for(const path of ['/api/productos','/api/productos?id=','/api/productos?id=one%
 console.log('Pruebas de eliminación correctas: fila seleccionada, último producto, permisos, cero filas e ID inválido.');
 // Public catalog excludes internal fields and reads subsequent pages.
 let pages=0;
-globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,categoria,peso,precio_venta,foto');pages++;return Response.json(u.searchParams.get('offset')==='0'?[{id:'public1',nombre:'Producto',categoria:'Maquinaria',precio_venta:20,precio_producto:10,precio_cbm:5}]:[]);};
+globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,categoria,peso,precio_venta,foto,en');pages++;return Response.json(u.searchParams.get('offset')==='0'?[{id:'public1',nombre:'Producto',categoria:'Maquinaria',precio_venta:20,precio_producto:10,precio_cbm:5}]:[]);};
 r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,200);const catalog=await r.json();assert.equal(catalog[0].precio_venta,20);assert.equal(catalog[0].categoria,'Maquinaria');assert.equal('precio_producto' in catalog[0],false);assert.equal('precio_cbm' in catalog[0],false);assert.equal('cbm' in catalog[0],false);assert.equal(pages,2);
 globalThis.fetch=async(url)=>{const u=new URL(url);assert.equal(u.searchParams.get('select'),'id,codigo,nombre,descripcion,categoria,cbm,peso,precio_cbm,precio_producto,precio_venta,foto');return Response.json(u.searchParams.get('offset')==='0'?[{id:'interno1',nombre:'Producto',precio_venta:20,precio_producto:10,precio_cbm:5,creado:'x'}]:[]);};
 r=await worker.fetch(req('/api/catalogo-interno'),env);assert.equal(r.status,200);const interno=await r.json();assert.equal(interno[0].precio_producto,10);assert.equal(interno[0].precio_cbm,5);assert.equal('creado' in interno[0],false);
@@ -82,3 +82,37 @@ r=await pedir({nombre:'Beto',telefono:'7777-1111',lineas:[{codigo:'A-1',cantidad
 globalThis.fetch=async()=>Response.json([guardado]);
 r=await worker.fetch(req('/api/solicitudes/'+guardado.id),env);assert.equal(r.status,200);assert.equal((await r.text()).includes('precioProducto'),false);
 console.log('Cotizaciones del catálogo: registro, numeración, validación y vista sin costos.');
+
+// Acceso: lo interno pide sesión y se consulta como ese usuario; lo público lleva la clave de la página.
+globalThis.fetch=()=>{throw new Error('Sin sesión no se debe consultar la base');};
+for(const [ruta,metodo] of [['/api/productos','GET'],['/api/productos','PUT'],['/api/productos?id=one','DELETE'],['/api/catalogo-interno','GET']]){r=await worker.fetch(req(ruta,metodo,metodo==='PUT'?[]:undefined,''),env);assert.equal(r.status,401);}
+const conClave={...env,EVK_CLAVE_SERVICIO:'clave-de-la-pagina'};let vistas=[];
+globalThis.fetch=async(url,init)=>{vistas.push(init.headers);return Response.json([]);};
+r=await worker.fetch(req('/api/productos'),conClave);assert.equal(r.status,200);
+assert.equal(vistas.at(-1).authorization,'Bearer sesion-de-prueba');assert.equal(vistas.at(-1)['x-evk-clave'],undefined);
+r=await worker.fetch(req('/api/catalogo-interno'),conClave);assert.equal(vistas.at(-1).authorization,'Bearer sesion-de-prueba');
+r=await worker.fetch(req('/api/catalogo'),conClave);assert.equal(r.status,200);
+assert.equal(vistas.at(-1)['x-evk-clave'],'clave-de-la-pagina');assert.equal(vistas.at(-1).authorization,'Bearer test-anon');
+console.log('Acceso: lo interno exige sesión; lo público usa la clave de la página.');
+
+// Cupones: se calculan con los precios de la base, se rechazan los vencidos y quedan en la cotización.
+const hoyIso=new Date().toISOString().slice(0,10);
+let cuponBase={codigo:'EVK10',tipo:'porcentaje',valor:10,minimo:0,usos_max:null,vence:null,activo:true};let filaCupon=null;
+globalThis.fetch=async(url,init={})=>{const u=new URL(url);
+  if(u.pathname.endsWith('/cupones'))return Response.json(u.searchParams.get('codigo')==='eq.EVK10'?[cuponBase]:[]);
+  if(u.pathname.endsWith('/configuracion'))return Response.json([]);
+  if(u.pathname.endsWith('/productos'))return Response.json([{id:'p1',codigo:'A-1',nombre:'Máquina',en:{nombre:'Machine'},cbm:1,peso:0,precio_cbm:1,precio_producto:1,precio_venta:2000,foto:''}]);
+  if(init.method==='POST'){filaCupon=JSON.parse(init.body);return new Response(null,{status:201});}
+  return Response.json([]);};
+const probar=(body)=>worker.fetch(new Request('https://example.test/api/cupon',{method:'POST',body:JSON.stringify(body)}),env);
+r=await probar({cupon:'evk10',lineas:[{codigo:'A-1',cantidad:2,precio:1}]});let cu=await r.json();assert.equal(cu.ok,true);assert.equal(cu.descuento,400);assert.equal(cu.codigo,'EVK10');
+r=await probar({cupon:'NOEXISTE',lineas:[{codigo:'A-1',cantidad:1}]});assert.equal((await r.json()).motivo,'no-existe');
+cuponBase={...cuponBase,vence:'2020-01-01'};r=await probar({cupon:'EVK10',lineas:[{codigo:'A-1',cantidad:1}]});assert.equal((await r.json()).motivo,'vencido');
+cuponBase={...cuponBase,vence:hoyIso,minimo:5000};r=await probar({cupon:'EVK10',lineas:[{codigo:'A-1',cantidad:1}]});cu=await r.json();assert.equal(cu.motivo,'minimo');assert.equal(cu.minimo,5000);
+cuponBase={...cuponBase,minimo:0,activo:false};r=await probar({cupon:'EVK10',lineas:[{codigo:'A-1',cantidad:1}]});assert.equal((await r.json()).motivo,'no-existe');
+cuponBase={codigo:'EVK10',tipo:'monto',valor:150,minimo:0,usos_max:null,vence:null,activo:true};
+r=await pedir({nombre:'Ana',telefono:'8888 7777',cupon:'EVK10',lineas:[{codigo:'A-1',cantidad:1}]});assert.equal(r.status,201);const conCupon=(await r.json()).cotizacion;
+assert.equal(conCupon.total,1850);assert.equal(conCupon.subtotal,2000);assert.equal(conCupon.descuento,150);assert.equal(conCupon.cupon,'EVK10');assert.equal(conCupon.lineas[0].nombreEn,'Machine');
+assert.equal(filaCupon.total_final,1850);assert.equal(filaCupon.descuento_monto,150);assert.equal(filaCupon.descuento,7.5);assert.equal(filaCupon.totales.cupon,'EVK10');assert.equal(filaCupon.totales.totalVenta,2000);
+r=await pedir({nombre:'Ana',telefono:'8888 7777',cupon:'MALO',lineas:[{codigo:'A-1',cantidad:1}]});assert.equal(r.status,400);assert.equal((await r.json()).motivo,'no-existe');
+console.log('Cupones: porcentaje, monto fijo, vencido, mínimo, desactivado y registro en la cotización.');

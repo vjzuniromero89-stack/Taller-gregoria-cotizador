@@ -1,4 +1,4 @@
--- Cotizador CBM (Taller Gregoriana) — esquema inicial de Supabase
+-- Cotizador CBM (EVK Logistic) — esquema inicial de Supabase
 --
 -- Cómo aplicarla:
 --   Opción A (recomendada, sin instalar nada): entra a tu proyecto en supabase.com
@@ -22,7 +22,9 @@ create table if not exists public.productos (
   precio_producto numeric not null default 0,
   precio_venta numeric not null default 0,
   foto text not null default '',
-  creado timestamptz not null default now()
+  creado timestamptz not null default now(),
+  descripcion text not null default '',
+  categoria text not null default 'Sin categoría'
 );
 
 alter table public.productos enable row level security;

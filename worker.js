@@ -1,29 +1,32 @@
-/** Cloudflare Worker: serves the SPA and proxies product persistence to Supabase. */
+/** API (se ejecuta en Vercel desde api/index.js): proxies product persistence to Supabase. */
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status,
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
 });
 
-function sbHeaders(env, extra = {}) {
-  return {
-    apikey: env.SUPABASE_ANON_KEY,
-    ...(env.SUPABASE_ANON_KEY.startsWith("sb_publishable_") ? {} : { authorization: `Bearer ${env.SUPABASE_ANON_KEY}` }),
-    "content-type": "application/json",
-    ...extra,
-  };
+// Con "token" la consulta se hace como el usuario que entró (parte interna).
+// Sin él, la hace la página pública, que se identifica ante la base con su propia clave.
+function sbHeaders(env, extra = {}, token = "") {
+  const acceso = token
+    ? { authorization: `Bearer ${token}` }
+    : {
+      ...(env.SUPABASE_ANON_KEY.startsWith("sb_publishable_") ? {} : { authorization: `Bearer ${env.SUPABASE_ANON_KEY}` }),
+      ...(env.EVK_CLAVE_SERVICIO ? { "x-evk-clave": env.EVK_CLAVE_SERVICIO } : {}),
+    };
+  return { apikey: env.SUPABASE_ANON_KEY, ...acceso, "content-type": "application/json", ...extra };
 }
 
-async function sbRequest(env, path, init = {}) {
+async function sbRequest(env, path, init = {}, token = "") {
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
     const missing = ["SUPABASE_URL", "SUPABASE_ANON_KEY"].filter(name => !env[name]);
-    return { ok: false, status: 503, error: `Falta configurar ${missing.join(" y ")} en Cloudflare → Settings → Runtime variables and secrets. Guarda y vuelve a desplegar.` };
+    return { ok: false, status: 503, error: `Falta configurar ${missing.join(" y ")} en Vercel → Settings → Environment Variables. Guarda y vuelve a desplegar.` };
   }
   const base = env.SUPABASE_URL.replace(/\/$/, "");
   let res;
   try {
     res = await fetch(`${base}/rest/v1/${path}`, {
     ...init,
-    headers: sbHeaders(env, init.headers || {}),
+    headers: sbHeaders(env, init.headers || {}, token),
   });
   } catch {
     return { ok: false, status: 502, error: "No se pudo conectar con Supabase. Comprueba SUPABASE_URL y que el proyecto esté activo." };
@@ -45,24 +48,48 @@ async function fichasDeClientes(env) {
   return Array.isArray(valor) ? valor : [];
 }
 
+/**
+ * Revisa un cupón contra el total de la cotización. Devuelve { ok, codigo, tipo, valor, descuento }
+ * o { ok: false, motivo } con motivo "no-existe", "vencido", "agotado" o "minimo".
+ */
+async function revisarCupon(env, escrito, total) {
+  const codigo = String(escrito || "").trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{3,30}$/.test(codigo)) return { ok: false, motivo: "no-existe" };
+  const c = await sbRequest(env, `cupones?codigo=eq.${codigo}&select=*&limit=1`);
+  if (!c.ok) return { ok: false, motivo: "error" };
+  const cupon = Array.isArray(c.data) ? c.data[0] : null;
+  if (!cupon || !cupon.activo) return { ok: false, motivo: "no-existe" };
+  if (cupon.vence && cupon.vence < new Date().toISOString().slice(0, 10)) return { ok: false, motivo: "vencido" };
+  if (cupon.usos_max) {
+    const usos = await sbRequest(env, `cotizaciones_clientes?select=id&totales-%3E%3Ecupon=eq.${codigo}&or=(totales-%3E%3Eestado.is.null,totales-%3E%3Eestado.neq.cancelada)&limit=1000`);
+    if (!usos.ok) return { ok: false, motivo: "error" };
+    if ((usos.data || []).length >= cupon.usos_max) return { ok: false, motivo: "agotado" };
+  }
+  const minimo = Number(cupon.minimo) || 0, valor = Number(cupon.valor) || 0;
+  if (!(total > 0) || total < minimo) return { ok: false, motivo: "minimo", minimo };
+  const bruto = cupon.tipo === "monto" ? Math.min(valor, total) : total * valor / 100;
+  return { ok: true, codigo, tipo: cupon.tipo, valor, minimo, descuento: Math.round(bruto * 100) / 100 };
+}
+
 /** Lo que el cliente puede ver de su cotización: nunca costos ni flete. */
 function cotizacionPublica(fila) {
   const contacto = fila.totales?.contacto || {};
   return {
     id: fila.id, numero: fila.numero, fecha: fila.fecha, cliente: fila.cliente || "",
     telefono: contacto.telefono || "", direccion: contacto.direccion || "", nota: contacto.nota || "", total: Number(fila.total_final) || 0,
+    subtotal: Number(fila.totales?.totalVenta) || 0, descuento: Number(fila.descuento_monto) || 0, cupon: fila.totales?.cupon || "",
     token: contacto.token || "", estado: fila.totales?.estado || "pendiente",
     confirmadaEl: fila.totales?.confirmadaEl || null, entregadaEl: fila.totales?.entregadaEl || null,
     pagado: (Array.isArray(fila.totales?.pagos) ? fila.totales.pagos : []).reduce((s, p) => s + (Number(p.monto) || 0), 0),
     pagos: (Array.isArray(fila.totales?.pagos) ? fila.totales.pagos : []).map((p) => ({ fecha: p.fecha || null, monto: Number(p.monto) || 0, nota: String(p.nota || "") })),
     lineas: (Array.isArray(fila.lineas) ? fila.lineas : []).map((l) => ({
-      codigo: l.codigo, nombre: l.nombre, cantidad: Number(l.cantidad) || 0, precio: Number(l.precioVenta) || 0, foto: l.foto || "",
+      codigo: l.codigo, nombre: l.nombre, nombreEn: l.nombreEn || "", cantidad: Number(l.cantidad) || 0, precio: Number(l.precioVenta) || 0, foto: l.foto || "",
     })),
   };
 }
 
 const CATALOGOS = {
-  "/api/catalogo": ["id", "codigo", "nombre", "descripcion", "categoria", "peso", "precio_venta", "foto"],
+  "/api/catalogo": ["id", "codigo", "nombre", "descripcion", "categoria", "peso", "precio_venta", "foto", "en"],
   "/api/catalogo-interno": ["id", "codigo", "nombre", "descripcion", "categoria", "cbm", "peso", "precio_cbm", "precio_producto", "precio_venta", "foto"],
 };
 
@@ -98,6 +125,24 @@ export default {
       });
     }
 
+    // El cliente prueba un cupón antes de enviar su cotización: se calcula con los precios de la base, no con los que él mande.
+    if (url.pathname === "/api/cupon" && request.method === "POST") {
+      let cuerpo;
+      try { cuerpo = await request.json(); } catch { return json({ ok: false, motivo: "no-existe" }, 400); }
+      const pedidas = new Map();
+      for (const l of Array.isArray(cuerpo?.lineas) ? cuerpo.lineas.slice(0, 40) : []) {
+        const codigo = texto(l?.codigo, 60).replace(/["\\]/g, ""), cantidad = Math.floor(Number(l?.cantidad));
+        if (codigo && cantidad >= 1) pedidas.set(codigo, Math.min(99, cantidad));
+      }
+      if (!pedidas.size) return json({ ok: false, motivo: "minimo", minimo: 0 });
+      const codigos = [...pedidas.keys()].map((c) => `"${c}"`).join(",");
+      const prod = await sbRequest(env, `productos?select=codigo,precio_venta&codigo=in.(${encodeURIComponent(codigos)})`);
+      if (!prod.ok || !Array.isArray(prod.data)) return json({ ok: false, motivo: "error" }, 503);
+      const total = prod.data.reduce((s, p) => s + (Number(p.precio_venta) || 0) * (pedidas.get(p.codigo) || 0), 0);
+      const resultado = await revisarCupon(env, cuerpo?.cupon, total);
+      return json(resultado, resultado.motivo === "error" ? 503 : 200);
+    }
+
     // El cliente envía su cotización desde el catálogo: se registra con precios tomados de la base de datos.
     if (url.pathname === "/api/solicitudes" && request.method === "POST") {
       let cuerpo;
@@ -110,21 +155,21 @@ export default {
         if (codigo && cantidad >= 1) pedidas.set(codigo, Math.min(99, cantidad));
       }
       if (!nombre || telefono.replace(/\D/g, "").length < 8 || !pedidas.size) {
-        return json({ ok: false, error: "Faltan el nombre, el teléfono o los equipos." }, 400);
+        return json({ ok: false, error: "Faltan el nombre, el teléfono o los productos." }, 400);
       }
       const codigos = [...pedidas.keys()].map((c) => `"${c}"`).join(",");
-      const prod = await sbRequest(env, `productos?select=id,codigo,nombre,cbm,peso,precio_cbm,precio_producto,precio_venta,foto&codigo=in.(${encodeURIComponent(codigos)})`);
+      const prod = await sbRequest(env, `productos?select=id,codigo,nombre,en,cbm,peso,precio_cbm,precio_producto,precio_venta,foto&codigo=in.(${encodeURIComponent(codigos)})`);
       if (!prod.ok || !Array.isArray(prod.data)) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
       const lineas = [];
       for (const [codigo, cantidad] of pedidas) {
         const p = prod.data.find((x) => x.codigo === codigo);
         if (p) lineas.push({
-          id: crypto.randomUUID(), productId: p.id, codigo: p.codigo, nombre: p.nombre, foto: p.foto || "",
+          id: crypto.randomUUID(), productId: p.id, codigo: p.codigo, nombre: p.nombre, nombreEn: String(p.en?.nombre || ""), foto: p.foto || "",
           cbm: Number(p.cbm) || 0, peso: Number(p.peso) || 0, minimoCbm: MINIMO_CBM, precioCbm: Number(p.precio_cbm) || 0,
           precioProducto: Number(p.precio_producto) || 0, precioVenta: Number(p.precio_venta) || 0, cantidad,
         });
       }
-      if (!lineas.length) return json({ ok: false, error: "Esos equipos ya no están en el catálogo." }, 400);
+      if (!lineas.length) return json({ ok: false, error: "Esos productos ya no están en el catálogo." }, 400);
 
       // El mismo teléfono conserva el mismo enlace de cliente (/cliente/<token>).
       const tel = telefono.replace(/\D/g, "");
@@ -157,10 +202,22 @@ export default {
       t.totalCosto = t.totalProducto + t.totalFlete;
       t.ganancia = t.totalVenta - t.totalCosto;
       t.margen = t.totalVenta > 0 ? t.ganancia / t.totalVenta : 0;
+      // Cupón de descuento: si el cliente escribió uno que no sirve, se le avisa en vez de registrar sin descuento.
+      let cupon = null;
+      if (texto(cuerpo?.cupon, 30)) {
+        cupon = await revisarCupon(env, cuerpo.cupon, t.totalVenta);
+        if (!cupon.ok) return json({ ok: false, error: "El cupón no es válido.", motivo: cupon.motivo, minimo: cupon.minimo }, cupon.motivo === "error" ? 503 : 400);
+      }
+      const descuentoMonto = cupon ? cupon.descuento : 0;
+      const porcentaje = t.totalVenta > 0 ? Math.round(descuentoMonto / t.totalVenta * 10000) / 100 : 0;
+      const totalFinal = Math.round((t.totalVenta - descuentoMonto) * 100) / 100;
       const fila = {
         id: crypto.randomUUID(), numero: `WEB-${String(siguiente).padStart(4, "0")}`, fecha: new Date().toISOString(), cliente: nombre,
-        descuento: 0, descuento_monto: 0, total_final: t.totalVenta, lineas,
-        totales: { ...t, contacto: { telefono, tel, token, direccion, nota, origen: "catalogo" } },
+        descuento: porcentaje, descuento_monto: descuentoMonto, total_final: totalFinal, lineas,
+        totales: {
+          ...t, ...(cupon ? { cupon: cupon.codigo, descuento: porcentaje, descuentoMonto, totalFinal } : {}),
+          contacto: { telefono, tel, token, direccion, nota, origen: "catalogo" },
+        },
       };
       const guardada = await sbRequest(env, "cotizaciones_clientes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(fila) });
       if (!guardada.ok) return json({ ok: false, error: "No se pudo registrar la cotización." }, 503);
@@ -187,13 +244,18 @@ export default {
       return json({ ok: true, nombre: ficha?.nombre || r.data[0]?.cliente || "", cotizaciones: r.data.map(cotizacionPublica) });
     }
 
+    // Lo que sigue con costos (catálogo interno y productos) es solo para quien entró con su usuario.
+    const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const interno = url.pathname === "/api/catalogo-interno" || url.pathname === "/api/productos";
+    if (interno && !token) return json({ ok: false, error: "Entra con tu usuario para continuar." }, 401);
+
     // Catálogo para clientes: solo precio de venta, nunca costos. Catálogo interno: costos, flete y CBM.
     const campos = request.method === "GET" && CATALOGOS[url.pathname];
     if (campos) {
       const productos = [];
       // Stable ordering and pagination avoid truncating large catalogs.
       for (let offset = 0; ; ) {
-        const r = await sbRequest(env, `productos?select=${campos.join(",")}&order=creado.desc,id.asc&limit=500&offset=${offset}`);
+        const r = await sbRequest(env, `productos?select=${campos.join(",")}&order=creado.desc,id.asc&limit=500&offset=${offset}`, {}, interno ? token : "");
         if (!r.ok) return json({ ok: false, error: "El catálogo no está disponible temporalmente." }, 503);
         if (!Array.isArray(r.data)) return json({ ok: false, error: "Respuesta de catálogo inválida." }, 502);
         if (!r.data.length) break;
@@ -204,7 +266,7 @@ export default {
     }
 
     if (url.pathname === "/api/productos" && request.method === "GET") {
-      const r = await sbRequest(env, "productos?select=*&order=creado.desc");
+      const r = await sbRequest(env, "productos?select=*&order=creado.desc", {}, token);
       return r.ok ? json(r.data || []) : json({ ok: false, error: r.error }, r.status);
     }
 
@@ -214,7 +276,7 @@ export default {
       const result = await sbRequest(env, `productos?id=eq.${encodeURIComponent(id)}&select=id`, {
         method: "DELETE",
         headers: { Prefer: "return=representation" },
-      });
+      }, token);
       if (!result.ok) return json({ ok: false, error: result.error }, result.status);
       if (!Array.isArray(result.data) || !result.data.some(row => row.id === id)) {
         return json({ ok: false, error: "No se eliminó el producto. Puede que ya no exista o que falten permisos SELECT/DELETE en Supabase." }, 409);
@@ -232,7 +294,7 @@ export default {
           method: "POST",
           headers: { Prefer: "resolution=merge-duplicates,return=representation" },
           body: JSON.stringify(lista),
-        });
+        }, token);
         if (!ins.ok) return json({ ok: false, stage: "upsert", status: ins.status, error: ins.error }, ins.status);
         return json({ ok: true, count: lista.length, saved: Array.isArray(ins.data) ? ins.data.length : lista.length });
       }
