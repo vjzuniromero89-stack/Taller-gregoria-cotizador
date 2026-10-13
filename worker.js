@@ -93,9 +93,26 @@ const CATALOGOS = {
   "/api/catalogo-interno": ["id", "codigo", "nombre", "descripcion", "categoria", "cbm", "peso", "precio_cbm", "precio_producto", "precio_venta", "foto"],
 };
 
+const PAGINA_EN_PAUSA = `<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>Taller Gregoriana</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#14222B;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;padding:24px}
+h1{font-size:clamp(28px,6vw,44px);margin:0 0 10px}p{margin:0;color:#C4D1D7;font-size:17px;line-height:1.5;max-width:420px}</style></head>
+<body><main><h1>Taller Gregoriana</h1><p>La página no está disponible en este momento. Vuelve a intentarlo más tarde.</p></main></body></html>`;
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // Interruptor para apagar toda la página por un rato: en Cloudflare, el secreto PAUSADO = "1".
+    // Se enciende con `npx wrangler secret put PAUSADO` y se apaga con `npx wrangler secret delete PAUSADO`.
+    if (env.PAUSADO === "1") {
+      if (url.pathname.startsWith("/api/")) return json({ ok: false, error: "Página en pausa." }, 503);
+      return new Response(PAGINA_EN_PAUSA, {
+        status: 503,
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "retry-after": "3600" },
+      });
+    }
 
     if (url.pathname === "/runtime-config.js") {
       const config = { SUPABASE_URL: env.SUPABASE_URL || "", SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY || "" };
