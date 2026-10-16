@@ -68,6 +68,8 @@ const INGLES = {
 
   "Ver ficha": "View details",
   "Oferta": "Sale",
+  "Antes": "Was",
+  "Ahorras": "You save",
   "Destacado": "Featured",
   "Ordenar": "Sort",
   "Destacados primero": "Featured first",

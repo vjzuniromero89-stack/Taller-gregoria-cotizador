@@ -148,7 +148,17 @@ const ESTILOS = `${ESTILOS_VITRINA}
 .cat-insignia { position:absolute; right:12px; top:12px; z-index:1; background:#FF8A1F; color:#1B1000; border-radius:999px; padding:4px 11px; font-size:12px; font-weight:800;
   letter-spacing:.05em; text-transform:uppercase; box-shadow:0 4px 10px rgba(0,0,0,.18); }
 .cat-insignia.oferta { background:#E0242B; color:#fff; }
-.cat-antes { display:inline-block; margin-left:8px; color:#8A97A0; font-size:15px; font-weight:600; }
+.cat-antes { display:block; margin:2px 0 1px; color:#B42318; font-size:15px; font-weight:700; letter-spacing:.01em; }
+.cat-antes s { font-size:17px; text-decoration-thickness:2px; text-decoration-color:#D92D20; }
+.cat-antes.grande { font-size:17px; }
+.cat-antes.grande s { font-size:22px; }
+.cat-precio b.en-oferta, .cat-precio-grande b.en-oferta { color:#D92D20; }
+.cat-ahorro { display:inline-flex; align-items:center; gap:6px; margin:6px 0 2px; padding:4px 6px 4px 10px; border-radius:999px;
+  background:#D92D20; color:#fff; font-size:13px; font-weight:700; line-height:1.2; box-shadow:0 2px 6px rgba(217,45,32,.28); }
+.cat-precio .cat-ahorro b, .cat-ahorro b { font-family:inherit; font-size:14px; font-weight:800; color:#fff; line-height:inherit; }
+.cat-ahorro i { font-style:normal; background:#FFD500; color:#7A1A12; border-radius:999px; padding:2px 7px; font-size:12.5px; font-weight:800; }
+.cat-ahorro.grande { font-size:15px; padding:5px 7px 5px 12px; }
+.cat-precio-grande .cat-ahorro b, .cat-ahorro.grande b { font-family:inherit; font-size:16px; color:#fff; line-height:inherit; }
 .cat-barra { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; }
 .cat-ordenar { display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#5B6B75; }
 .cat-ordenar select { border:1px solid #CAD4DA; border-radius:8px; padding:8px 10px; background:#fff; color:#14222B; font:inherit; font-size:14.5px; font-weight:600; }
@@ -470,6 +480,20 @@ function Foto({ src, alt }) {
   return <img src={src} alt={alt} loading="lazy" onError={() => setRota(true)} />;
 }
 
+/** Precio anterior tachado, bien visible, encima del precio de oferta. */
+function Antes({ antes, grande }) {
+  return <span className={`cat-antes${grande ? " grande" : ""}`}>{T("Antes")} <s className="cat-num">{dinero(antes)}</s></span>;
+}
+/** Cuánto se ahorra el cliente con la oferta. */
+function Ahorro({ antes, precio, grande }) {
+  if (!(antes > precio && precio > 0)) return null;
+  return (
+    <span className={`cat-ahorro${grande ? " grande" : ""}`}>
+      {T("Ahorras")} <b className="cat-num">{dinero(antes - precio)}</b><i className="cat-num">−{Math.round((1 - precio / antes) * 100)} %</i>
+    </span>
+  );
+}
+
 /** Días de producción y de envío que el cliente ve en cada producto. */
 function Tiempos({ grande }) {
   return (
@@ -566,7 +590,7 @@ function Tarjeta({ p, modo, abrir, guardar, pedir, opciones, elegir }) {
   const precio = modo === "cliente" ? p.venta : p.producto;
   const contenido = <>
     <div className="cat-foto">
-      {modo === "cliente" && (p.antes > 0 ? <span className="cat-insignia oferta">{T("Oferta")}</span> : p.destacado ? <span className="cat-insignia">{T("Destacado")}</span> : null)}
+      {modo === "cliente" && (p.antes > 0 ? <span className="cat-insignia oferta">{T("Oferta")}{precio > 0 && p.antes > precio ? ` −${Math.round((1 - precio / p.antes) * 100)} %` : ""}</span> : p.destacado ? <span className="cat-insignia">{T("Destacado")}</span> : null)}
       <Foto src={p.foto} alt="" />
     </div>
     <div className="cat-cuerpo">
@@ -583,8 +607,9 @@ function Tarjeta({ p, modo, abrir, guardar, pedir, opciones, elegir }) {
         <div className="cat-pie">
           <div className="cat-precio">
             <small>{modo === "cliente" ? T("Precio") : "Precio de costo"}</small>
-            <b className="cat-num">{precio > 0 ? dinero(precio) : T("Consultar")}</b>
-            {modo === "cliente" && p.antes > 0 && <s className="cat-antes cat-num">{dinero(p.antes)}</s>}
+            {modo === "cliente" && p.antes > 0 && <Antes antes={p.antes} />}
+            <b className={`cat-num${modo === "cliente" && p.antes > 0 ? " en-oferta" : ""}`}>{precio > 0 ? dinero(precio) : T("Consultar")}</b>
+            {modo === "cliente" && p.antes > 0 && <Ahorro antes={p.antes} precio={precio} />}
             {modo === "cliente" && precio > 0 && <span className="cat-cordobas cat-num">{cordobas(precio)}</span>}
             {modo === "cliente" && precio > 0 && <span className="cat-puesto"><MapPin size={12} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
             {modo === "cliente" && <Tiempos />}
@@ -653,8 +678,9 @@ function Ficha({ p, modo, cerrar, pedir, opciones, elegir }) {
             <Opciones p={p} opciones={opciones} elegir={elegir} modo={modo} />
             <div className="cat-precio-grande">
               <small>{interno ? "Precio de costo del producto" : T("Precio")}</small>
-              <b className="cat-num">{precio > 0 ? dinero(precio) : T("Consultar")}</b>
-              {!interno && p.antes > 0 && <s className="cat-antes cat-num" style={{ marginLeft: 10, fontSize: 20 }}>{dinero(p.antes)}</s>}
+              {!interno && p.antes > 0 && <Antes antes={p.antes} grande />}
+              <b className={`cat-num${!interno && p.antes > 0 ? " en-oferta" : ""}`}>{precio > 0 ? dinero(precio) : T("Consultar")}</b>
+              {!interno && p.antes > 0 && <Ahorro antes={p.antes} precio={precio} grande />}
               {!interno && precio > 0 && <span className="cat-cordobas grande cat-num">{cordobas(precio)}</span>}
               {!interno && precio > 0 && <span className="cat-puesto grande"><MapPin size={14} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
               {!interno && <Tiempos grande />}
