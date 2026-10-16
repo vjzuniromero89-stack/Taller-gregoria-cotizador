@@ -529,6 +529,18 @@ async function sbSaveFichas(fichas) {
   if (error) { console.error(error); return false; }
   return true;
 }
+async function sbLeerConfig(clave) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("configuracion").select("*").eq("clave", clave).maybeSingle();
+  if (error) { console.error(error); return null; }
+  return data ? data.valor : null;
+}
+async function sbGuardarConfig(clave, valor) {
+  if (!supabase) return false;
+  const { error } = await supabase.from("configuracion").upsert({ clave, valor });
+  if (error) { console.error(error); return false; }
+  return true;
+}
 async function sbSaveEmpresa(empresa) {
   if (!supabase) return false;
   const { error } = await supabase.from("configuracion").upsert({ clave: "empresa", valor: empresa });
@@ -2884,18 +2896,27 @@ function InicioView({ productos, internas, clientes, empresa, irA, vendedor }) {
 
 const VACIA = { contador: 0, lista: [] };
 /** Ganancia de cada producto: precio de venta menos el costo del producto y el envío (CBM a cobrar × precio del CBM). */
-function GananciaProductosView({ productos }) {
+function GananciaProductosView({ productos, socios, cambiarEnlaceSocios, soloLectura = false }) {
+  const [copiado, setCopiado] = useState(false);
+  const [cambiando, setCambiando] = useState(false);
+  const enlaceSocios = socios?.token ? `${window.location.origin}/socios/${socios.token}` : "";
+  const copiarEnlace = async () => {
+    try { await navigator.clipboard.writeText(enlaceSocios); setCopiado(true); setTimeout(() => setCopiado(false), 2200); } catch { /* sin portapapeles */ }
+  };
+  const nuevoEnlace = async () => { setCambiando(true); await cambiarEnlaceSocios(); setCambiando(false); };
   const [q, setQ] = useState("");
   const [categoria, setCategoria] = useState("");
   const [orden, setOrden] = useState("ganancia");
 
   const filas = useMemo(() => productos.map((p) => {
     const k = cbmCobro(p.cbm, p.peso);
-    const producto = num(p.precioProducto), envio = k.cobrable * num(p.precioCbm), costo = producto + envio;
+    const producto = num(p.precioProducto), envio = k.cobrable * num(p.precioCbm);
+    // Igual que en las cotizaciones: comisión del 3 % sobre el costo (producto + envío).
+    const comision = (producto + envio) * COMISION, costo = producto + envio + comision;
     const venta = num(p.precioVenta), ficha = leerDescripcion(p.descripcion);
     const ganancia = venta > 0 ? venta - costo : null;
     return {
-      p, ficha, k, producto, envio, costo, venta, ganancia,
+      p, ficha, k, producto, envio, comision, costo, venta, ganancia,
       sobreCosto: ganancia !== null && costo > 0 ? ganancia / costo : null,
       margen: ganancia !== null && venta > 0 ? ganancia / venta : null,
     };
@@ -2923,10 +2944,10 @@ function GananciaProductosView({ productos }) {
 
   function descargar() {
     const celda = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const cabecera = ["Código", "Producto", "Categoría", "Costo del producto", "CBM a cobrar", "Precio CBM", "Envío", "Costo total", "Precio de venta", "Ganancia", "% sobre el costo"];
+    const cabecera = ["Código", "Producto", "Categoría", "Costo del producto", "CBM a cobrar", "Precio CBM", "Envío", "Comisión 3 %", "Costo total", "Precio de venta", "Ganancia", "% sobre el costo"];
     const lineas = visibles.map((f) => [
       f.p.codigo, f.p.nombre + (f.ficha.opcion ? ` · ${f.ficha.opcion}` : ""), f.p.categoria || "", f.producto.toFixed(2), m3(f.k.cobrable),
-      num(f.p.precioCbm).toFixed(2), f.envio.toFixed(2), f.costo.toFixed(2), f.venta.toFixed(2),
+      num(f.p.precioCbm).toFixed(2), f.envio.toFixed(2), f.comision.toFixed(2), f.costo.toFixed(2), f.venta.toFixed(2),
       f.ganancia === null ? "" : f.ganancia.toFixed(2), f.sobreCosto === null ? "" : (f.sobreCosto * 100).toFixed(1),
     ]);
     const csv = "﻿" + [cabecera, ...lineas].map((l) => l.map(celda).join(",")).join("\r\n");
@@ -2940,7 +2961,29 @@ function GananciaProductosView({ productos }) {
   return (
     <div className="space-y-6">
       <EncabezadoPagina icon={TrendingUp} tono="verde" titulo="Ganancia por producto"
-        descripcion="Precio de venta menos el costo del producto y el envío. El envío es el CBM a cobrar de cada producto por el precio del CBM." />
+        descripcion="Precio de venta menos el costo del producto, el envío y la comisión del 3 %. El envío es el CBM a cobrar de cada producto por el precio del CBM." />
+
+      {!soloLectura && cambiarEnlaceSocios && (
+        <section className="pagos-caja">
+          <div className="font-semibold">Enlace para tus socios</div>
+          <p className="text-sm muted mt-1">
+            Quien tenga este enlace ve esta misma tabla de ganancias, sin poder cambiar nada y sin entrar con usuario.
+            Si lo cambias, el enlace anterior deja de funcionar.
+          </p>
+          {enlaceSocios ? (
+            <div className="flex gap-2 mt-2" style={{ flexWrap: "wrap" }}>
+              <input className="inp" style={{ flex: "1 1 260px" }} readOnly value={enlaceSocios} aria-label="Enlace para socios" onFocus={(e) => e.target.select()} />
+              <button className="btn btn-primary" onClick={copiarEnlace}><Share2 size={16} />{copiado ? "Copiado" : "Copiar"}</button>
+              <a className="btn btn-ghost" style={{ textDecoration: "none" }} href={enlaceSocios} target="_blank" rel="noopener noreferrer"><Eye size={16} />Abrir</a>
+              <a className="btn btn-ghost" style={{ textDecoration: "none" }} target="_blank" rel="noopener noreferrer"
+                href={`https://wa.me/?text=${encodeURIComponent(`Ganancia por producto de Taller Gregoriana:\n${enlaceSocios}`)}`}>Enviar por WhatsApp</a>
+              <button className="btn btn-ghost" onClick={nuevoEnlace} disabled={cambiando}>{cambiando ? "Cambiando…" : "Cambiar enlace"}</button>
+            </div>
+          ) : (
+            <button className="btn btn-primary mt-2" onClick={nuevoEnlace} disabled={cambiando}><Plus size={16} />{cambiando ? "Creando…" : "Crear enlace para socios"}</button>
+          )}
+        </section>
+      )}
 
       <div className="resumen-ganancia">
         <div className="t-ganancia">
@@ -2986,7 +3029,7 @@ function GananciaProductosView({ productos }) {
           <div className="paper tabla-ganancias">
             <table className="num tabla-por-producto">
               <thead><tr>
-                <th>Producto</th><th>Costo del producto</th><th>Envío</th><th>Costo total</th><th>Precio de venta</th><th>Ganancia</th><th>% sobre el costo</th>
+                <th>Producto</th><th>Costo del producto</th><th>Envío</th><th>Comisión 3 %</th><th>Costo total</th><th>Precio de venta</th><th>Ganancia</th><th>% sobre el costo</th>
               </tr></thead>
               <tbody>
                 {visibles.map((f) => (
@@ -2997,6 +3040,7 @@ function GananciaProductosView({ productos }) {
                     </th>
                     <td>{money(f.producto)}</td>
                     <td>{money(f.envio)}<span className="detalle">{m3(f.k.cobrable)} m³ × {money(num(f.p.precioCbm))}</span></td>
+                    <td>{money(f.comision)}</td>
                     <td>{money(f.costo)}</td>
                     <td>{f.venta > 0 ? money(f.venta) : <span className="muted">Sin precio</span>}</td>
                     <td className={f.ganancia === null ? "" : f.ganancia < 0 ? "neg" : "pos"}><b>{f.ganancia === null ? "—" : money(f.ganancia)}</b></td>
@@ -3007,7 +3051,7 @@ function GananciaProductosView({ productos }) {
             </table>
           </div>
         )}
-        <p className="text-sm muted mt-2">El precio de venta y el costo se cambian en Producto. La comisión del 3 % de las cotizaciones no se resta aquí.</p>
+        <p className="text-sm muted mt-2">Costo total = costo del producto + envío + comisión del 3 % sobre ese costo.{soloLectura ? "" : " El precio de venta y el costo se cambian en Producto."}</p>
       </section>
     </div>
   );
@@ -3182,6 +3226,15 @@ function AdminApp({ sesion }) {
     if (faltan.length) guardarInternas({ ...internas, lista: [...faltan.map(copiaInterna), ...internas.lista] });
   }, [cargando, clientes.lista, internas.lista]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Enlace de solo lectura para que los socios vean la ganancia por producto (/socios/<token>).
+  const [enlaceSocios, setEnlaceSocios] = useState(null);
+  useEffect(() => { sbLeerConfig("enlace-socios").then((v) => { if (v?.token) setEnlaceSocios(v); }); }, []);
+  const cambiarEnlaceSocios = async () => {
+    const valor = { token: crypto.randomUUID().replace(/-/g, ""), creado: new Date().toISOString() };
+    if (await sbGuardarConfig("enlace-socios", valor)) { setEnlaceSocios(valor); avisar("Enlace para socios listo"); }
+    else avisar("No se pudo guardar el enlace para socios.", "error");
+  };
+
   const guardarEmpresa = async (data) => {
     setEmpresa(data);
     await localSave("empresa", data);
@@ -3271,7 +3324,9 @@ function AdminApp({ sesion }) {
                   <InicioView vendedor={esVendedor} productos={productos} internas={internas} clientes={clientes}
                     empresa={empresa} irA={cambiarTab} />
                 )}
-                {tab === "ganancia-productos" && <GananciaProductosView productos={productos} />}
+                {tab === "ganancia-productos" && (
+                  <GananciaProductosView productos={productos} socios={enlaceSocios} cambiarEnlaceSocios={cambiarEnlaceSocios} />
+                )}
                 {tab === "productos" && (
                   <ProductosView productos={productos} guardarProductos={guardarProductos} eliminarProducto={eliminarProducto} avisar={avisar}
                     empresa={empresa} guardarEmpresa={guardarEmpresa} />
@@ -3352,7 +3407,37 @@ export default function App() {
   if (ruta === "/catalogo-interno") return <Acceso supabase={supabase}>{() => <Catalogo modo="interno" cabeceras={cabecerasSesion} />}</Acceso>;
   if (ruta.startsWith("/cotizacion/")) return <VistaCotizacion id={ruta.slice("/cotizacion/".length)} />;
   if (ruta.startsWith("/cliente/")) return <VistaCliente token={ruta.slice("/cliente/".length)} />;
+  if (ruta.startsWith("/socios/")) return <VistaSocios token={ruta.slice("/socios/".length)} />;
   return <Acceso supabase={supabase}>{(sesion) => <AdminApp sesion={sesion} />}</Acceso>;
+}
+
+/** Lo que ven los socios con su enlace: la ganancia por producto, sin poder cambiar nada. */
+function VistaSocios({ token }) {
+  const [datos, setDatos] = useState(null);
+  const [estado, setEstado] = useState("cargando");
+  useEffect(() => {
+    fetch(`/api/socios/${encodeURIComponent(token)}`, { cache: "no-store" })
+      .then(async (r) => { const d = await r.json().catch(() => ({})); if (r.ok && d.ok) { setDatos(d); setEstado("listo"); } else setEstado(r.status === 404 ? "no-valido" : "error"); })
+      .catch(() => setEstado("error"));
+  }, [token]);
+  const productos = useMemo(() => (datos?.productos || []).map((p) => ({
+    id: p.id, codigo: p.codigo || "", nombre: p.nombre || "", categoria: p.categoria || "Sin categoría", descripcion: p.descripcion || "",
+    cbm: p.cbm || 0, peso: p.peso || 0, precioCbm: p.precio_cbm || 0, precioProducto: p.precio_producto || 0, precioVenta: p.precio_venta || 0, foto: p.foto || "",
+  })), [datos]);
+  const nombre = datos?.empresa?.nombre || "Taller Gregoriana";
+  return (
+    <div className="app" style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <main style={{ maxWidth: 1180, margin: "0 auto", padding: "20px 16px 48px" }}>
+        <div className="flex items-center gap-3 mb-4">
+          <img src={datos?.empresa?.logo || LOGO_POR_DEFECTO} alt="" style={{ height: 52, maxWidth: 110, objectFit: "contain", background: "#fff", borderRadius: 8, padding: 4 }} />
+          <div><div className="cond" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1 }}>{nombre}</div><div className="text-sm muted">Vista para socios · solo lectura</div></div>
+        </div>
+        {estado === "listo" ? <GananciaProductosView productos={productos} soloLectura /> :
+          <div className="paper p-6 text-center muted">{estado === "cargando" ? "Cargando…" : estado === "no-valido" ? "Este enlace ya no es válido. Pide uno nuevo." : "No se pudo cargar. Inténtalo de nuevo en un momento."}</div>}
+      </main>
+    </div>
+  );
 }
 
 function FichaProducto({ p, acciones, children, mostrarCategoria = true }) {

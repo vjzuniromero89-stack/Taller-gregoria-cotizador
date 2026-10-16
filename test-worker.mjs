@@ -116,3 +116,20 @@ assert.equal(conCupon.total,1850);assert.equal(conCupon.subtotal,2000);assert.eq
 assert.equal(filaCupon.total_final,1850);assert.equal(filaCupon.descuento_monto,150);assert.equal(filaCupon.descuento,7.5);assert.equal(filaCupon.totales.cupon,'EVK10');assert.equal(filaCupon.totales.totalVenta,2000);
 r=await pedir({nombre:'Ana',telefono:'8888 7777',cupon:'MALO',lineas:[{codigo:'A-1',cantidad:1}]});assert.equal(r.status,400);assert.equal((await r.json()).motivo,'no-existe');
 console.log('Cupones: porcentaje, monto fijo, vencido, mínimo, desactivado y registro en la cotización.');
+
+// Enlace de socios: solo con el token guardado, y devuelve costos y precios de venta.
+{
+  const tokenBueno = 'a'.repeat(32);
+  globalThis.fetch = async (url) => {
+    const u = new URL(url);
+    if (u.pathname.endsWith('/configuracion')) return Response.json([{ clave: 'enlace-socios', valor: { token: tokenBueno } }, { clave: 'empresa', valor: { nombre: 'Taller', logo: '' } }]);
+    if (u.pathname.endsWith('/productos')) return Response.json(u.searchParams.get('offset') === '0' ? [{ id: 'p1', codigo: 'A-1', precio_producto: 100, precio_cbm: 550, precio_venta: 900, creado: 'x' }] : []);
+    return Response.json([]);
+  };
+  let r = await worker.fetch(req('/api/socios/' + tokenBueno), env);
+  assert.equal(r.status, 200);
+  const d = await r.json();
+  assert.equal(d.productos[0].precio_producto, 100); assert.equal(d.productos[0].precio_venta, 900); assert.equal('creado' in d.productos[0], false);
+  r = await worker.fetch(req('/api/socios/' + 'b'.repeat(32)), env); assert.equal(r.status, 404);
+  console.log('Enlace de socios: solo con el token guardado.');
+}

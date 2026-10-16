@@ -262,6 +262,26 @@ export default {
       return json({ ok: true, nombre: ficha?.nombre || r.data[0]?.cliente || "", cotizaciones: r.data.map(cotizacionPublica) });
     }
 
+    // Enlace de socios: ganancia por producto, solo lectura, con el token que el dueño guardó en la configuración.
+    const tokenSocios = request.method === "GET" && url.pathname.match(/^\/api\/socios\/([0-9a-f]{32})$/)?.[1];
+    if (tokenSocios) {
+      const c = await sbRequest(env, "configuracion?clave=in.(enlace-socios,empresa)&select=clave,valor");
+      const fila = (clave) => (c.ok && Array.isArray(c.data) ? c.data.find((x) => x.clave === clave)?.valor : null) || {};
+      if (!c.ok) return json({ ok: false, error: "No disponible por el momento." }, 503);
+      if (!fila("enlace-socios").token || fila("enlace-socios").token !== tokenSocios) return json({ ok: false, error: "Este enlace ya no es válido." }, 404);
+      const campos = CATALOGOS["/api/catalogo-interno"];
+      const productos = [];
+      for (let offset = 0; ; ) {
+        const r = await sbRequest(env, `productos?select=${campos.join(",")}&order=creado.desc,id.asc&limit=500&offset=${offset}`);
+        if (!r.ok || !Array.isArray(r.data)) return json({ ok: false, error: "No disponible por el momento." }, 503);
+        if (!r.data.length) break;
+        productos.push(...r.data.map((p) => Object.fromEntries(campos.map((k) => [k, p[k]]))));
+        offset += r.data.length;
+      }
+      const empresa = fila("empresa");
+      return json({ ok: true, empresa: { nombre: String(empresa.nombre || ""), logo: String(empresa.logo || "") }, productos });
+    }
+
     // Lo que sigue con costos (catálogo interno y productos) es solo para quien entró con su usuario.
     const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     const interno = url.pathname === "/api/catalogo-interno" || url.pathname === "/api/productos";
