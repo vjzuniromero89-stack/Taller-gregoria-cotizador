@@ -153,10 +153,10 @@ const ESTILOS = `${ESTILOS_VITRINA}
 .cat-antes.grande { font-size:17px; }
 .cat-antes.grande s { font-size:22px; }
 .cat-precio b.en-oferta, .cat-precio-grande b.en-oferta { color:#D92D20; }
-.cat-ahorro { display:inline-flex; align-items:center; gap:6px; margin:6px 0 2px; padding:4px 6px 4px 10px; border-radius:999px;
+.cat-ahorro { display:inline-flex; flex-wrap:wrap; white-space:nowrap; max-width:100%; align-items:center; gap:6px; margin:6px 0 2px; padding:4px 6px 4px 10px; border-radius:999px;
   background:#D92D20; color:#fff; font-size:13px; font-weight:700; line-height:1.2; box-shadow:0 2px 6px rgba(217,45,32,.28); }
 .cat-precio .cat-ahorro b, .cat-ahorro b { font-family:inherit; font-size:14px; font-weight:800; color:#fff; line-height:inherit; }
-.cat-ahorro i { font-style:normal; background:#FFD500; color:#7A1A12; border-radius:999px; padding:2px 7px; font-size:12.5px; font-weight:800; }
+.cat-ahorro i { font-style:normal; white-space:nowrap; background:#FFD500; color:#7A1A12; border-radius:999px; padding:2px 7px; font-size:12.5px; font-weight:800; }
 .cat-ahorro.grande { font-size:15px; padding:5px 7px 5px 12px; }
 .cat-precio-grande .cat-ahorro b, .cat-ahorro.grande b { font-family:inherit; font-size:16px; color:#fff; line-height:inherit; }
 .cat-barra { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; }
@@ -489,7 +489,7 @@ function Ahorro({ antes, precio, grande }) {
   if (!(antes > precio && precio > 0)) return null;
   return (
     <span className={`cat-ahorro${grande ? " grande" : ""}`}>
-      {T("Ahorras")} <b className="cat-num">{dinero(antes - precio)}</b><i className="cat-num">−{Math.round((1 - precio / antes) * 100)} %</i>
+      {T("Ahorras")} <b className="cat-num">{dinero(antes - precio)}</b><i className="cat-num">−{Math.round((1 - precio / antes) * 100)} %</i>
     </span>
   );
 }
@@ -590,7 +590,7 @@ function Tarjeta({ p, modo, abrir, guardar, pedir, opciones, elegir }) {
   const precio = modo === "cliente" ? p.venta : p.producto;
   const contenido = <>
     <div className="cat-foto">
-      {modo === "cliente" && (p.antes > 0 ? <span className="cat-insignia oferta">{T("Oferta")}{precio > 0 && p.antes > precio ? ` −${Math.round((1 - precio / p.antes) * 100)} %` : ""}</span> : p.destacado ? <span className="cat-insignia">{T("Destacado")}</span> : null)}
+      {modo === "cliente" && (p.antes > 0 ? <span className="cat-insignia oferta">{T("Oferta")}{precio > 0 && p.antes > precio ? ` −${Math.round((1 - precio / p.antes) * 100)} %` : ""}</span> : p.destacado ? <span className="cat-insignia">{T("Destacado")}</span> : null)}
       <Foto src={p.foto} alt="" />
     </div>
     <div className="cat-cuerpo">
