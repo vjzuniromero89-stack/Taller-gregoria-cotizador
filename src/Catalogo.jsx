@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList, MapPin, Factory } from "lucide-react";
+import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList, MapPin, Factory, Tag } from "lucide-react";
 import { LOGO_POR_DEFECTO } from "./logo.js";
 import { hojaImagen, TIEMPOS_ENTREGA, DIAS_PRODUCCION, DIAS_ENVIO } from "./hoja.js";
 import { leerDescripcion } from "./descripcion.js";
@@ -147,16 +147,19 @@ const ESTILOS = `${ESTILOS_VITRINA}
 .cat-card:hover .cat-foto img { transform:scale(1.04); }
 .cat-insignia { position:absolute; right:12px; top:12px; z-index:1; background:#FF8A1F; color:#1B1000; border-radius:999px; padding:4px 11px; font-size:12px; font-weight:800;
   letter-spacing:.05em; text-transform:uppercase; box-shadow:0 4px 10px rgba(0,0,0,.18); }
-.cat-insignia.oferta { background:#E0242B; color:#fff; }
+.cat-insignia.oferta { background:#12873F; color:#fff; }
+.cat-aviso-oferta { display:flex; align-items:center; justify-content:center; gap:8px; padding:10px 16px; background:#12873F; color:#fff;
+  font-size:16px; font-weight:700; text-align:center; letter-spacing:.01em; }
+.cat-aviso-oferta b { background:#FFD500; color:#0B4D26; border-radius:999px; padding:2px 10px; font-size:17px; font-weight:800; }
 .cat-antes { display:block; margin:2px 0 1px; color:#B42318; font-size:15px; font-weight:700; letter-spacing:.01em; }
 .cat-antes s { font-size:17px; text-decoration-thickness:2px; text-decoration-color:#D92D20; }
 .cat-antes.grande { font-size:17px; }
 .cat-antes.grande s { font-size:22px; }
-.cat-precio b.en-oferta, .cat-precio-grande b.en-oferta { color:#D92D20; }
+.cat-precio b.en-oferta, .cat-precio-grande b.en-oferta { color:#0F7A3D; }
 .cat-ahorro { display:inline-flex; flex-wrap:wrap; white-space:nowrap; max-width:100%; align-items:center; gap:6px; margin:6px 0 2px; padding:4px 6px 4px 10px; border-radius:999px;
-  background:#D92D20; color:#fff; font-size:13px; font-weight:700; line-height:1.2; box-shadow:0 2px 6px rgba(217,45,32,.28); }
+  background:#12873F; color:#fff; font-size:13px; font-weight:700; line-height:1.2; box-shadow:0 2px 6px rgba(18,135,63,.28); }
 .cat-precio .cat-ahorro b, .cat-ahorro b { font-family:inherit; font-size:14px; font-weight:800; color:#fff; line-height:inherit; }
-.cat-ahorro i { font-style:normal; white-space:nowrap; background:#FFD500; color:#7A1A12; border-radius:999px; padding:2px 7px; font-size:12.5px; font-weight:800; }
+.cat-ahorro i { font-style:normal; white-space:nowrap; background:#FFD500; color:#0B4D26; border-radius:999px; padding:2px 7px; font-size:12.5px; font-weight:800; }
 .cat-ahorro.grande { font-size:15px; padding:5px 7px 5px 12px; }
 .cat-precio-grande .cat-ahorro b, .cat-ahorro.grande b { font-family:inherit; font-size:16px; color:#fff; line-height:inherit; }
 .cat-barra { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; }
@@ -478,6 +481,22 @@ function Foto({ src, alt }) {
   const [rota, setRota] = useState(false);
   if (!src || rota) return <Camera size={44} color="#B9C6CD" aria-hidden="true" />;
   return <img src={src} alt={alt} loading="lazy" onError={() => setRota(true)} />;
+}
+
+/** Franja de arriba: el descuento que tienen los productos en oferta. */
+function AvisoOferta({ productos }) {
+  const con = productos.filter((p) => p.venta > 0);
+  const desc = con.filter((p) => p.antes > p.venta).map((p) => Math.round((1 - p.venta / p.antes) * 100));
+  if (!desc.length) return null;
+  const max = Math.max(...desc);
+  const todos = desc.length === con.length && desc.every((d) => d === max);
+  return (
+    <div className="cat-aviso-oferta" role="note">
+      <Tag size={18} aria-hidden="true" />
+      {todos ? <span>{T("Todos los productos con")} <b className="cat-num">{max}&nbsp;%</b> {T("de descuento")}</span>
+        : <span>{T("Ofertas de hasta")} <b className="cat-num">{max}&nbsp;%</b> {T("de descuento")}</span>}
+    </div>
+  );
 }
 
 /** Precio anterior tachado, bien visible, encima del precio de oferta. */
@@ -1512,6 +1531,7 @@ export default function Catalogo({ modo = "cliente", productos: propios, guardar
           <EnlaceCatalogo modo={modo} avisar={avisar} />
         </div>
       )}
+      {modo === "cliente" && !enCotizaciones && estado === "listo" && <AvisoOferta productos={productos} />}
       <header className="cat-top">
         <div className="cat-wrap cat-top-in">
           {amarilla && !dentro && <SelectorIdioma cambiar={vistaPrevia ? setIdiomaVista : undefined} />}
