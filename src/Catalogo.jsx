@@ -172,7 +172,7 @@ const ESTILOS = `${ESTILOS_VITRINA}
 .cat-tiempos-p { display:flex; flex-direction:column; gap:3px; margin-top:7px; font-size:12px; color:#314551; line-height:1.25; }
 .cat-tiempos-p > span { display:inline-flex; align-items:center; gap:5px; }
 .cat-tiempos-p svg { flex-shrink:0; color:#1556B8; }
-.cat-tiempos-p b { font-weight:700; color:#0E3A8A; }
+.cat-precio .cat-tiempos-p b, .cat-tiempos-p b { font-family:inherit; font-size:inherit; line-height:inherit; font-weight:700; color:#0E3A8A; }
 .cat-tiempos-p.grande { flex-direction:row; flex-wrap:wrap; gap:6px 18px; font-size:14px; margin-top:10px; }
 .cat-puesto-total { display:flex; align-items:center; justify-content:flex-end; gap:5px; margin:0 0 8px; font-size:13px; font-weight:700; color:#14603A; }
 .cat-total-cordobas { margin:-2px 0 6px; text-align:right; font-size:17px; font-weight:700; color:#0E3A8A; }
