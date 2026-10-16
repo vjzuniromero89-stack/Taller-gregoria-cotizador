@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList } from "lucide-react";
+import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList, MapPin } from "lucide-react";
 import { LOGO_POR_DEFECTO } from "./logo.js";
 import { hojaImagen, TIEMPOS_ENTREGA, DIAS_PRODUCCION, DIAS_ENVIO } from "./hoja.js";
 import { leerDescripcion } from "./descripcion.js";
@@ -165,6 +165,11 @@ const ESTILOS = `${ESTILOS_VITRINA}
   min-height:2.6em; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; overflow:hidden; }
 .cat-cordobas { display:block; font-size:14px; font-weight:700; color:#5B6B75; margin-top:2px; }
 .cat-cordobas.grande { font-size:18px; color:#0E3A8A; margin-top:4px; }
+.cat-puesto { display:inline-flex; align-items:center; gap:4px; margin-top:7px; padding:3px 8px 3px 6px; border-radius:999px;
+  background:#E8F6EE; color:#14603A; font-size:11.5px; font-weight:700; line-height:1.2; letter-spacing:.01em; }
+.cat-puesto svg { flex-shrink:0; }
+.cat-puesto.grande { font-size:13.5px; padding:4px 10px 4px 8px; margin-top:8px; }
+.cat-puesto-total { display:flex; align-items:center; justify-content:flex-end; gap:5px; margin:0 0 8px; font-size:13px; font-weight:700; color:#14603A; }
 .cat-total-cordobas { margin:-2px 0 6px; text-align:right; font-size:17px; font-weight:700; color:#0E3A8A; }
 .cat-total-cordobas span { font-size:12.5px; font-weight:500; color:#5B6B75; }
 .cat-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
@@ -566,6 +571,7 @@ function Tarjeta({ p, modo, abrir, guardar, pedir, opciones, elegir }) {
             <b className="cat-num">{precio > 0 ? dinero(precio) : T("Consultar")}</b>
             {modo === "cliente" && p.antes > 0 && <s className="cat-antes cat-num">{dinero(p.antes)}</s>}
             {modo === "cliente" && precio > 0 && <span className="cat-cordobas cat-num">{cordobas(precio)}</span>}
+            {modo === "cliente" && precio > 0 && <span className="cat-puesto"><MapPin size={12} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
           </div>
           <span className="cat-ver">{T("Ver ficha")}<ChevronRight size={15} /></span>
         </div>
@@ -634,6 +640,7 @@ function Ficha({ p, modo, cerrar, pedir, opciones, elegir }) {
               <b className="cat-num">{precio > 0 ? dinero(precio) : T("Consultar")}</b>
               {!interno && p.antes > 0 && <s className="cat-antes cat-num" style={{ marginLeft: 10, fontSize: 20 }}>{dinero(p.antes)}</s>}
               {!interno && precio > 0 && <span className="cat-cordobas grande cat-num">{cordobas(precio)}</span>}
+              {!interno && precio > 0 && <span className="cat-puesto grande"><MapPin size={14} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
             </div>
             {pedir && !(precio > 0) && <ConsultarPrecio p={p} whatsapp={pedir.whatsapp} />}
             {interno ? (
@@ -862,7 +869,7 @@ function datosHojaCliente(cot, empresa) {
   totales.push(...TIEMPOS_ENTREGA.map(([k, v]) => [T(k), v.replace("días", T("días"))]));
   return {
     empresa: { ...empresa, contacto: T(String(empresa.contacto || "").split("\n")[0]) }, columnas, filas, totales, total: dinero(cot.total), totalLabel: T("Total"),
-    pie: T("Precios en dólares estadounidenses."),
+    pie: T("Precios en dólares estadounidenses, puestos en Nicaragua."),
     cot: { numero: cot.numero, fecha: cot.fecha, cliente: [cot.cliente, cot.telefono && `Tel. ${cot.telefono}`].filter(Boolean).join(" · ") },
   };
 }
@@ -1086,6 +1093,9 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar, token, nomb
                 <p className="cat-total-cordobas cat-num">
                   {cordobas(total - descuento)} <span>· {T("tipo de cambio")} C$ {tasaCordoba.toLocaleString("en-US", { maximumFractionDigits: 4 })}</span>
                 </p>
+              )}
+              {total > 0 && (
+                <p className="cat-puesto-total"><MapPin size={13} aria-hidden="true" />{T("Precios puestos en Nicaragua")}</p>
               )}
               <div className="cat-campos">
                 <label>{T("Tu nombre")}
