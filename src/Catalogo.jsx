@@ -611,7 +611,7 @@ function Tarjeta({ p, modo, abrir, guardar, pedir, opciones, elegir }) {
             <b className={`cat-num${modo === "cliente" && p.antes > 0 ? " en-oferta" : ""}`}>{precio > 0 ? dinero(precio) : T("Consultar")}</b>
             {modo === "cliente" && p.antes > 0 && <Ahorro antes={p.antes} precio={precio} />}
             {modo === "cliente" && precio > 0 && <span className="cat-cordobas cat-num">{cordobas(precio)}</span>}
-            {modo === "cliente" && precio > 0 && <span className="cat-puesto"><MapPin size={12} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
+            {modo === "cliente" && precio > 0 && <span className="cat-puesto"><MapPin size={12} aria-hidden="true" />{T("Precio puesto en Managua")}</span>}
             {modo === "cliente" && <Tiempos />}
           </div>
           <span className="cat-ver">{T("Ver ficha")}<ChevronRight size={15} /></span>
@@ -682,7 +682,7 @@ function Ficha({ p, modo, cerrar, pedir, opciones, elegir }) {
               <b className={`cat-num${!interno && p.antes > 0 ? " en-oferta" : ""}`}>{precio > 0 ? dinero(precio) : T("Consultar")}</b>
               {!interno && p.antes > 0 && <Ahorro antes={p.antes} precio={precio} grande />}
               {!interno && precio > 0 && <span className="cat-cordobas grande cat-num">{cordobas(precio)}</span>}
-              {!interno && precio > 0 && <span className="cat-puesto grande"><MapPin size={14} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
+              {!interno && precio > 0 && <span className="cat-puesto grande"><MapPin size={14} aria-hidden="true" />{T("Precio puesto en Managua")}</span>}
               {!interno && <Tiempos grande />}
             </div>
             {pedir && !(precio > 0) && <ConsultarPrecio p={p} whatsapp={pedir.whatsapp} />}
@@ -912,7 +912,7 @@ function datosHojaCliente(cot, empresa) {
   totales.push(...TIEMPOS_ENTREGA.map(([k, v]) => [T(k), v.replace("días", T("días"))]));
   return {
     empresa: { ...empresa, contacto: T(String(empresa.contacto || "").split("\n")[0]) }, columnas, filas, totales, total: dinero(cot.total), totalLabel: T("Total"),
-    pie: T("Precios en dólares estadounidenses, puestos en Nicaragua."),
+    pie: T("Precios en dólares estadounidenses, puestos en Managua."),
     cot: { numero: cot.numero, fecha: cot.fecha, cliente: [cot.cliente, cot.telefono && `Tel. ${cot.telefono}`].filter(Boolean).join(" · ") },
   };
 }
@@ -1138,7 +1138,7 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar, token, nomb
                 </p>
               )}
               {total > 0 && (
-                <p className="cat-puesto-total"><MapPin size={13} aria-hidden="true" />{T("Precios puestos en Nicaragua")}</p>
+                <p className="cat-puesto-total"><MapPin size={13} aria-hidden="true" />{T("Precios puestos en Managua")}</p>
               )}
               <div className="cat-campos">
                 <label>{T("Tu nombre")}
