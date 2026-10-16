@@ -116,6 +116,10 @@ const STYLES = `
 .stat-card::after { content:""; position:absolute; left:0; right:0; top:0; height:4px; background:var(--tono,#CAD4DA); }
 .quote-list button:hover { background:#F3F8F9; }
 .fila-maquina td:nth-child(2) { font-size:12.5px; color:#5B6B75; }
+.tabla-por-producto tbody th { display:flex; align-items:center; gap:10px; min-width:230px; white-space:normal; }
+.tabla-por-producto tbody th span { white-space:normal; max-width:260px; }
+.tabla-por-producto td .detalle { display:block; font-size:11.5px; color:#5B6B75; font-weight:500; }
+.tabla-por-producto td:nth-child(2) { text-align:right; }
 .enlace { color:#1556B8; font-weight:600; text-decoration:underline; padding:0; }
 .resumen-ganancia { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
 .resumen-ganancia > div { background:#fff; border:1px solid #CAD4DA; border-radius:12px; padding:14px 16px; }
@@ -2879,6 +2883,136 @@ function InicioView({ productos, internas, clientes, empresa, irA, vendedor }) {
 }
 
 const VACIA = { contador: 0, lista: [] };
+/** Ganancia de cada producto: precio de venta menos el costo del producto y el envío (CBM a cobrar × precio del CBM). */
+function GananciaProductosView({ productos }) {
+  const [q, setQ] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [orden, setOrden] = useState("ganancia");
+
+  const filas = useMemo(() => productos.map((p) => {
+    const k = cbmCobro(p.cbm, p.peso);
+    const producto = num(p.precioProducto), envio = k.cobrable * num(p.precioCbm), costo = producto + envio;
+    const venta = num(p.precioVenta), ficha = leerDescripcion(p.descripcion);
+    const ganancia = venta > 0 ? venta - costo : null;
+    return {
+      p, ficha, k, producto, envio, costo, venta, ganancia,
+      sobreCosto: ganancia !== null && costo > 0 ? ganancia / costo : null,
+      margen: ganancia !== null && venta > 0 ? ganancia / venta : null,
+    };
+  }), [productos]);
+
+  const categorias = [...new Set(filas.map((f) => f.p.categoria || "Sin categoría"))].sort((a, b) => a.localeCompare(b, "es"));
+  const s = q.trim().toLowerCase();
+  const visibles = filas
+    .filter((f) => (!categoria || (f.p.categoria || "Sin categoría") === categoria) &&
+      (!s || `${f.p.codigo} ${f.p.nombre} ${f.ficha.opcion}`.toLowerCase().includes(s)))
+    .sort((a, b) => {
+      if (orden === "nombre") return String(a.p.codigo).localeCompare(String(b.p.codigo), "es");
+      const va = orden === "porcentaje" ? a.sobreCosto : a.ganancia, vb = orden === "porcentaje" ? b.sobreCosto : b.ganancia;
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return vb - va;
+    });
+
+  const conPrecio = filas.filter((f) => f.ganancia !== null);
+  const promedio = conPrecio.length ? conPrecio.reduce((t, f) => t + f.ganancia, 0) / conPrecio.length : 0;
+  const pierden = conPrecio.filter((f) => f.ganancia < 0).length;
+  const sinPrecio = filas.length - conPrecio.length;
+  const mejor = [...conPrecio].sort((a, b) => b.ganancia - a.ganancia)[0];
+
+  function descargar() {
+    const celda = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const cabecera = ["Código", "Producto", "Categoría", "Costo del producto", "CBM a cobrar", "Precio CBM", "Envío", "Costo total", "Precio de venta", "Ganancia", "% sobre el costo"];
+    const lineas = visibles.map((f) => [
+      f.p.codigo, f.p.nombre + (f.ficha.opcion ? ` · ${f.ficha.opcion}` : ""), f.p.categoria || "", f.producto.toFixed(2), m3(f.k.cobrable),
+      num(f.p.precioCbm).toFixed(2), f.envio.toFixed(2), f.costo.toFixed(2), f.venta.toFixed(2),
+      f.ganancia === null ? "" : f.ganancia.toFixed(2), f.sobreCosto === null ? "" : (f.sobreCosto * 100).toFixed(1),
+    ]);
+    const csv = "﻿" + [cabecera, ...lineas].map((l) => l.map(celda).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "ganancia-por-producto.csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  return (
+    <div className="space-y-6">
+      <EncabezadoPagina icon={TrendingUp} tono="verde" titulo="Ganancia por producto"
+        descripcion="Precio de venta menos el costo del producto y el envío. El envío es el CBM a cobrar de cada producto por el precio del CBM." />
+
+      <div className="resumen-ganancia">
+        <div className="t-ganancia">
+          <span className="lbl">Ganancia promedio por producto</span>
+          <b className={`num ${promedio < 0 ? "neg" : "pos"}`}>{money(promedio)}</b>
+          <span className="text-sm muted">De {conPrecio.length} {conPrecio.length === 1 ? "producto con precio" : "productos con precio"} de venta.</span>
+        </div>
+        <div className="t-venta">
+          <span className="lbl">El que más deja</span>
+          <b className="num">{mejor ? mejor.p.codigo : "—"}</b>
+          <span className="text-sm muted">{mejor ? `${money(mejor.ganancia)} por unidad` : "Ponle precio de venta a tus productos."}</span>
+        </div>
+        <div className={pierden ? "t-pendiente" : "t-cobrado"}>
+          <span className="lbl">Pierden dinero</span>
+          <b className={`num ${pierden ? "neg" : ""}`}>{pierden}</b>
+          <span className="text-sm muted">{sinPrecio ? `${sinPrecio} sin precio de venta.` : "Todos tienen precio de venta."}</span>
+        </div>
+      </div>
+
+      <section>
+        <div className="section-toolbar" style={{ flexWrap: "wrap" }}>
+          <h2 className="cond text-2xl font-semibold">Productos <span className="muted font-medium">({visibles.length})</span></h2>
+          <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+            <select className="inp" style={{ width: "auto" }} aria-label="Categoría" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+              <option value="">Todas las categorías</option>
+              {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select className="inp" style={{ width: "auto" }} aria-label="Ordenar" value={orden} onChange={(e) => setOrden(e.target.value)}>
+              <option value="ganancia">Mayor ganancia primero</option>
+              <option value="porcentaje">Mayor % sobre el costo primero</option>
+              <option value="nombre">Por código</option>
+            </select>
+            <div className="relative" style={{ width: 190 }}>
+              <Search size={16} className="absolute left-3 top-1/2 muted" style={{ transform: "translateY(-50%)" }} />
+              <input className="inp" style={{ paddingLeft: 32, fontSize: 15 }} placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar producto" />
+            </div>
+            <button className="btn btn-ghost" onClick={descargar} disabled={!visibles.length}><FileText size={16} />Descargar para Excel</button>
+          </div>
+        </div>
+        {!visibles.length ? (
+          <div className="paper p-6 text-center muted">{productos.length ? "Ningún producto coincide con la búsqueda." : "Todavía no tienes productos."}</div>
+        ) : (
+          <div className="paper tabla-ganancias">
+            <table className="num tabla-por-producto">
+              <thead><tr>
+                <th>Producto</th><th>Costo del producto</th><th>Envío</th><th>Costo total</th><th>Precio de venta</th><th>Ganancia</th><th>% sobre el costo</th>
+              </tr></thead>
+              <tbody>
+                {visibles.map((f) => (
+                  <tr key={f.p.id}>
+                    <th scope="row">
+                      <Thumb src={f.p.foto} size={42} />
+                      <div><b>{f.p.codigo}</b><span>{f.p.nombre}{f.ficha.opcion ? ` · ${f.ficha.opcion}` : ""}</span></div>
+                    </th>
+                    <td>{money(f.producto)}</td>
+                    <td>{money(f.envio)}<span className="detalle">{m3(f.k.cobrable)} m³ × {money(num(f.p.precioCbm))}</span></td>
+                    <td>{money(f.costo)}</td>
+                    <td>{f.venta > 0 ? money(f.venta) : <span className="muted">Sin precio</span>}</td>
+                    <td className={f.ganancia === null ? "" : f.ganancia < 0 ? "neg" : "pos"}><b>{f.ganancia === null ? "—" : money(f.ganancia)}</b></td>
+                    <td className={f.ganancia === null ? "" : f.ganancia < 0 ? "neg" : "pos"}>{f.sobreCosto === null ? "—" : pct(f.sobreCosto)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-sm muted mt-2">El precio de venta y el costo se cambian en Producto. La comisión del 3 % de las cotizaciones no se resta aquí.</p>
+      </section>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "inicio", label: "Inicio", icon: Home },
   { id: "directorio", label: "Clientes", icon: Contact },
@@ -2887,6 +3021,7 @@ const TABS = [
   { id: "ganancias", label: "Ganancias", icon: TrendingUp },
   { id: "cupones", label: "Cupones", icon: Ticket },
   { id: "productos", label: "Producto", icon: Package },
+  { id: "ganancia-productos", label: "Ganancia por producto", corto: "Ganancia prod.", icon: DollarSign },
   { id: "catalogo-cliente", label: "Catálogo cliente", corto: "Cat. cliente", icon: Tag },
   { id: "catalogo-interno", label: "Catálogo interno", corto: "Cat. interno", icon: BookOpen },
 ];
@@ -3136,6 +3271,7 @@ function AdminApp({ sesion }) {
                   <InicioView vendedor={esVendedor} productos={productos} internas={internas} clientes={clientes}
                     empresa={empresa} irA={cambiarTab} />
                 )}
+                {tab === "ganancia-productos" && <GananciaProductosView productos={productos} />}
                 {tab === "productos" && (
                   <ProductosView productos={productos} guardarProductos={guardarProductos} eliminarProducto={eliminarProducto} avisar={avisar}
                     empresa={empresa} guardarEmpresa={guardarEmpresa} />
