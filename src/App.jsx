@@ -3453,7 +3453,35 @@ function EnlaceCatalogo({ avisar }) {
   </section>;
 }
 
+/** Si se publicó una versión nueva mientras la página estaba abierta, avisa para recargar (así nadie guarda con la versión vieja). */
+function AvisoVersion() {
+  const [nueva, setNueva] = useState(false);
+  useEffect(() => {
+    const actual = document.querySelector('script[src*="/assets/index-"]')?.getAttribute("src")?.match(/index-[^.]+.js/)?.[0];
+    if (!actual) return undefined;
+    const revisar = () => fetch("/", { cache: "no-store" }).then((r) => r.text())
+      .then((html) => { const v = html.match(/index-[^."]+.js/)?.[0]; if (v && v !== actual) setNueva(true); }).catch(() => {});
+    const alVolver = () => { if (document.visibilityState === "visible") revisar(); };
+    const t = setInterval(revisar, 3 * 60 * 1000);
+    document.addEventListener("visibilitychange", alVolver);
+    window.addEventListener("focus", revisar);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", alVolver); window.removeEventListener("focus", revisar); };
+  }, []);
+  if (!nueva) return null;
+  return (
+    <div role="alert" style={{ position: "fixed", left: 16, right: 16, bottom: 16, zIndex: 9999, maxWidth: 520, margin: "0 auto", background: "#0E3A8A", color: "#fff",
+      borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 8px 24px rgba(0,0,0,.25)", fontWeight: 600 }}>
+      <span style={{ flex: 1 }}>Hay una versión nueva de la página.</span>
+      <button onClick={() => window.location.reload()} style={{ background: "#FFD500", color: "#0B2550", border: 0, borderRadius: 8, padding: "8px 14px", fontWeight: 800, cursor: "pointer" }}>Actualizar</button>
+    </div>
+  );
+}
+
 export default function App() {
+  return <><Rutas /><AvisoVersion /></>;
+}
+
+function Rutas() {
   const ruta = window.location.pathname.replace(/\/+$/, "");
   // "/catalogo" es la dirección anterior del catálogo general y sigue funcionando.
   if (ruta === "/catalogo-cliente" || ruta === "/catalogo") return <Catalogo modo="cliente" />;
