@@ -139,6 +139,7 @@ export default {
       return json({
         nombre: String(valor.nombre || ""), contacto: String(valor.contacto || ""), logo: String(valor.logo || ""),
         whatsapp: String(valor.whatsapp || "").replace(/\D/g, ""),
+        tasa: Number(valor.tasa) > 0 ? Number(valor.tasa) : null,
       });
     }
 

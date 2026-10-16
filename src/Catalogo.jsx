@@ -9,6 +9,11 @@ import { CATALOGO_XPROMISE } from "./catalogoXpromise.js";
 const KG_POR_CBM = 350;
 const MINIMO_CBM = 1; // el transporte cobra como mínimo 1 CBM por cada máquina
 const dinero = (n) => "US$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Tipo de cambio oficial del Banco Central de Nicaragua para 2026 (fijo todo el año). El taller lo puede cambiar
+// en Producto, en los datos de la empresa; la página lo toma de /api/contacto.
+export const TASA_OFICIAL = 36.6243;
+let tasaCordoba = TASA_OFICIAL;
+const cordobas = (usd) => "C$ " + Math.round((usd || 0) * tasaCordoba).toLocaleString("en-US");
 const m3 = (n) => (n || 0).toLocaleString("en-US", { maximumFractionDigits: 3 }) + " m³";
 const kilos = (n) => (n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " kg";
 const sinAcentos = (v) => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -156,7 +161,12 @@ const ESTILOS = `${ESTILOS_VITRINA}
 .cat-cuerpo { padding:16px 16px 14px; display:flex; flex-direction:column; gap:6px; flex:1; }
 .cat-categoria { font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:#1556B8; }
 .cat-modelo { font-family:'Barlow Condensed',sans-serif; font-size:30px; font-weight:700; line-height:1; overflow-wrap:anywhere; }
-.cat-nombre { font-size:15px; line-height:1.3; color:#314551; font-weight:500; overflow-wrap:anywhere; }
+.cat-nombre { font-size:15px; line-height:1.3; color:#314551; font-weight:500; overflow-wrap:anywhere;
+  min-height:2.6em; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; overflow:hidden; }
+.cat-cordobas { display:block; font-size:14px; font-weight:700; color:#5B6B75; margin-top:2px; }
+.cat-cordobas.grande { font-size:18px; color:#0E3A8A; margin-top:4px; }
+.cat-total-cordobas { margin:-2px 0 6px; text-align:right; font-size:17px; font-weight:700; color:#0E3A8A; }
+.cat-total-cordobas span { font-size:12.5px; font-weight:500; color:#5B6B75; }
 .cat-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .cat-chip { display:inline-flex; align-items:center; gap:5px; background:#F3F6F7; border-radius:6px; padding:4px 8px; font-size:12.5px;
   font-weight:600; color:#314551; }
@@ -275,7 +285,8 @@ const ESTILOS = `${ESTILOS_VITRINA}
 .cat-card-editable:hover { transform:none; }
 .cat-card-abrir { display:flex; flex-direction:column; text-align:left; padding:0; border:0; background:none; width:100%; cursor:pointer; }
 .cat-card-abrir:focus-visible, .cat-porc:focus-visible { outline:3px solid #FF8A1F; outline-offset:-3px; }
-.cat-card-editable .cat-cuerpo { flex:0 0 auto; padding-bottom:10px; }
+.cat-card-editable .cat-cuerpo { flex:1 1 auto; padding-bottom:10px; }
+.cat-card-editable .cat-card-abrir { flex:1 1 auto; }
 .cat-editor { margin-top:auto; padding:12px 14px 14px; background:#F6F8F9; border-top:1px solid #E6ECEF; display:flex; flex-direction:column; gap:9px; }
 .cat-costo { display:flex; flex-direction:column; font-size:14px; color:#314551; }
 .cat-costo b { font-size:16px; color:#14222B; }
@@ -554,6 +565,7 @@ function Tarjeta({ p, modo, abrir, guardar, pedir, opciones, elegir }) {
             <small>{modo === "cliente" ? T("Precio") : "Precio de costo"}</small>
             <b className="cat-num">{precio > 0 ? dinero(precio) : T("Consultar")}</b>
             {modo === "cliente" && p.antes > 0 && <s className="cat-antes cat-num">{dinero(p.antes)}</s>}
+            {modo === "cliente" && precio > 0 && <span className="cat-cordobas cat-num">{cordobas(precio)}</span>}
           </div>
           <span className="cat-ver">{T("Ver ficha")}<ChevronRight size={15} /></span>
         </div>
@@ -621,6 +633,7 @@ function Ficha({ p, modo, cerrar, pedir, opciones, elegir }) {
               <small>{interno ? "Precio de costo del producto" : T("Precio")}</small>
               <b className="cat-num">{precio > 0 ? dinero(precio) : T("Consultar")}</b>
               {!interno && p.antes > 0 && <s className="cat-antes cat-num" style={{ marginLeft: 10, fontSize: 20 }}>{dinero(p.antes)}</s>}
+              {!interno && precio > 0 && <span className="cat-cordobas grande cat-num">{cordobas(precio)}</span>}
             </div>
             {pedir && !(precio > 0) && <ConsultarPrecio p={p} whatsapp={pedir.whatsapp} />}
             {interno ? (
@@ -818,10 +831,13 @@ function useEmpresaPublica(activo) {
     if (!activo) return;
     let vivo = true;
     fetch("/api/contacto", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (vivo && d) setEmpresa({
+      if (vivo && d) {
+        if (Number(d.tasa) > 0) tasaCordoba = Number(d.tasa);
+        setEmpresa({
         nombre: d.nombre || EMPRESA_PUBLICA.nombre, contacto: d.contacto || EMPRESA_PUBLICA.contacto,
-        logo: d.logo || EMPRESA_PUBLICA.logo, whatsapp: numeroWhatsapp(d.whatsapp),
-      });
+        logo: d.logo || EMPRESA_PUBLICA.logo, whatsapp: numeroWhatsapp(d.whatsapp), tasa: tasaCordoba,
+        });
+      }
     }).catch(() => {});
     return () => { vivo = false; };
   }, [activo]);
@@ -1065,6 +1081,11 @@ function PanelCotizacion({ lineas, cambiar, vaciar, empresa, cerrar, token, nomb
                   <span>{T("Total")}{hayConsultar && T(" (sin los productos por consultar)")}</span>
                   <b className="cat-num">{dinero(total - descuento)}</b>
                 </div>
+              )}
+              {total > 0 && (
+                <p className="cat-total-cordobas cat-num">
+                  {cordobas(total - descuento)} <span>· {T("tipo de cambio")} C$ {tasaCordoba.toLocaleString("en-US", { maximumFractionDigits: 4 })}</span>
+                </p>
               )}
               <div className="cat-campos">
                 <label>{T("Tu nombre")}

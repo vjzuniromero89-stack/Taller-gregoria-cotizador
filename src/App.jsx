@@ -1325,7 +1325,7 @@ function EmpresaCard({ empresa, guardarEmpresa, avisar }) {
   }
 
   async function guardar() {
-    const ok = await guardarEmpresa({ nombre: form.nombre.trim(), contacto: form.contacto.trim(), whatsapp: (form.whatsapp || "").trim(), logo: form.logo || "" });
+    const ok = await guardarEmpresa({ nombre: form.nombre.trim(), contacto: form.contacto.trim(), whatsapp: (form.whatsapp || "").trim(), tasa: Number(String(form.tasa || "").replace(",", ".")) > 0 ? Number(String(form.tasa).replace(",", ".")) : null, logo: form.logo || "" });
     if (ok) { avisar("Datos de tu empresa guardados"); setAbierto(false); }
   }
 
@@ -1380,6 +1380,14 @@ function EmpresaCard({ empresa, guardarEmpresa, avisar }) {
               {numeroWhatsapp(form.whatsapp)
                 ? `Las cotizaciones del catálogo de clientes llegarán al +${numeroWhatsapp(form.whatsapp)}.`
                 : "Escribe los 8 dígitos de tu celular de Nicaragua, o el número completo con código de país."}
+            </p>
+          </div>
+          <div>
+            <label className="lbl" htmlFor="e-tasa">Tipo de cambio (córdobas por dólar)</label>
+            <input id="e-tasa" className="inp num" inputMode="decimal" placeholder="36.6243" value={form.tasa ?? ""} onChange={set("tasa")} />
+            <p className="muted text-sm mt-1">
+              El catálogo del cliente muestra cada precio también en córdobas con este valor. Vacío = tipo de cambio oficial
+              del Banco Central de Nicaragua para 2026 (C$ 36.6243).
             </p>
           </div>
           <button className="btn btn-primary" onClick={guardar}>Guardar datos</button>
@@ -2934,6 +2942,7 @@ function AdminApp({ sesion }) {
             nombre: em.nombre || EMPRESA_POR_DEFECTO.nombre,
             contacto: em.contacto || EMPRESA_POR_DEFECTO.contacto,
             whatsapp: em.whatsapp || "",
+            tasa: em.tasa || "",
             logo: em.logo || EMPRESA_POR_DEFECTO.logo,
           }
         : EMPRESA_POR_DEFECTO);

@@ -38,9 +38,9 @@ r=await worker.fetch(req('/api/catalogo-interno'),env);assert.equal(r.status,200
 globalThis.fetch=async()=>Response.json({message:'internal error'},{status:403});
 r=await worker.fetch(req('/api/catalogo'),env);assert.equal(r.status,503);assert.equal((await r.text()).includes('internal error'),false);
 globalThis.fetch=async(url)=>{assert.equal(new URL(url).pathname,'/rest/v1/configuracion');return Response.json([{valor:{nombre:'Taller',whatsapp:'+505 8888-8888',logo:'data:secreto'}}]);};
-r=await worker.fetch(req('/api/contacto'),env);assert.equal(r.status,200);const contacto=await r.json();assert.deepEqual(contacto,{nombre:'Taller',contacto:'',logo:'data:secreto',whatsapp:'50588888888'});
+r=await worker.fetch(req('/api/contacto'),env);assert.equal(r.status,200);const contacto=await r.json();assert.deepEqual(contacto,{nombre:'Taller',contacto:'',logo:'data:secreto',whatsapp:'50588888888',tasa:null});
 globalThis.fetch=async()=>Response.json({message:'x'},{status:500});
-r=await worker.fetch(req('/api/contacto'),env);assert.deepEqual(await r.json(),{nombre:'',contacto:'',logo:'',whatsapp:''});
+r=await worker.fetch(req('/api/contacto'),env);assert.deepEqual(await r.json(),{nombre:'',contacto:'',logo:'',whatsapp:'',tasa:null});
 console.log('Catálogo: paginación, campos públicos y errores verificados.');
 console.log('Contacto: nombre, contacto, logo y WhatsApp de la empresa.');
 // Cotización enviada desde el catálogo: precios de la base, número siguiente y sin costos en la respuesta.

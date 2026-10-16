@@ -38,6 +38,7 @@ export function cambiarIdioma(nuevo) {
 
 const INGLES = {
   "Taller Mecánico y Lubricentro": "Auto Repair Shop and Lube Center",
+  "tipo de cambio": "exchange rate",
   "Elige una categoría o busca directamente.": "Choose a category or search directly.",
   "Aquí ves el estado de tus pedidos y puedes cotizar más productos del catálogo.": "Here you can see the status of your orders and quote more products from the catalog.",
   "Hola,": "Hello,",
