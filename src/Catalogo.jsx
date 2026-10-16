@@ -159,9 +159,12 @@ const ESTILOS = `${ESTILOS_VITRINA}
 .cat-ahorro { display:inline-flex; flex-wrap:wrap; white-space:nowrap; max-width:100%; align-items:center; gap:6px; margin:6px 0 2px; padding:4px 6px 4px 10px; border-radius:999px;
   background:#12873F; color:#fff; font-size:13px; font-weight:700; line-height:1.2; box-shadow:0 2px 6px rgba(18,135,63,.28); }
 .cat-precio .cat-ahorro b, .cat-ahorro b { font-family:inherit; font-size:14px; font-weight:800; color:#fff; line-height:inherit; }
-.cat-ahorro i { font-style:normal; white-space:nowrap; background:#FFD500; color:#0B4D26; border-radius:999px; padding:2px 7px; font-size:12.5px; font-weight:800; }
-.cat-ahorro.grande { font-size:15px; padding:5px 7px 5px 12px; }
-.cat-precio-grande .cat-ahorro b, .cat-ahorro.grande b { font-family:inherit; font-size:16px; color:#fff; line-height:inherit; }
+.cat-ahorro-fila { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 2px; }
+.cat-ahorro-fila .cat-ahorro { margin:0; padding:4px 10px; }
+.cat-desc { font-style:normal; white-space:nowrap; background:#FFD500; color:#0B4D26; border-radius:999px; padding:4px 9px; font-size:13.5px; font-weight:800; line-height:1.2; }
+.cat-ahorro-fila.grande .cat-ahorro { font-size:15px; padding:5px 12px; }
+.cat-ahorro-fila.grande .cat-desc { font-size:16px; padding:5px 11px; }
+.cat-precio-grande .cat-ahorro b, .cat-ahorro-fila.grande .cat-ahorro b { font-family:inherit; font-size:16px; color:#fff; line-height:inherit; }
 .cat-barra { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; }
 .cat-ordenar { display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#5B6B75; }
 .cat-ordenar select { border:1px solid #CAD4DA; border-radius:8px; padding:8px 10px; background:#fff; color:#14222B; font:inherit; font-size:14.5px; font-weight:600; }
@@ -507,8 +510,9 @@ function Antes({ antes, grande }) {
 function Ahorro({ antes, precio, grande }) {
   if (!(antes > precio && precio > 0)) return null;
   return (
-    <span className={`cat-ahorro${grande ? " grande" : ""}`}>
-      {T("Ahorras")} <b className="cat-num">{dinero(antes - precio)}</b><i className="cat-num">−{Math.round((1 - precio / antes) * 100)} %</i>
+    <span className={`cat-ahorro-fila${grande ? " grande" : ""}`}>
+      <span className="cat-ahorro">{T("Ahorras")} <b className="cat-num">{dinero(antes - precio)}</b></span>
+      <i className="cat-desc cat-num">−{Math.round((1 - precio / antes) * 100)} %</i>
     </span>
   );
 }
