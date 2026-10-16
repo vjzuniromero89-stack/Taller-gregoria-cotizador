@@ -39,6 +39,8 @@ export function cambiarIdioma(nuevo) {
 const INGLES = {
   "Taller Mecánico y Lubricentro": "Auto Repair Shop and Lube Center",
   "tipo de cambio": "exchange rate",
+  "Envío": "Shipping",
+  "Producción": "Production",
   "Precio puesto en Nicaragua": "Delivered price in Nicaragua",
   "Precios puestos en Nicaragua": "Prices delivered in Nicaragua",
   "Precios en dólares estadounidenses, puestos en Nicaragua.": "Prices in US dollars, delivered in Nicaragua.",

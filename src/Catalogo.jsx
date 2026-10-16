@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList, MapPin } from "lucide-react";
+import { Search, X, Camera, Share2, Check, Box, Scale, Ship, ChevronRight, Plus, Minus, Trash2, Send, ClipboardList, MapPin, Factory } from "lucide-react";
 import { LOGO_POR_DEFECTO } from "./logo.js";
 import { hojaImagen, TIEMPOS_ENTREGA, DIAS_PRODUCCION, DIAS_ENVIO } from "./hoja.js";
 import { leerDescripcion } from "./descripcion.js";
@@ -169,6 +169,11 @@ const ESTILOS = `${ESTILOS_VITRINA}
   background:#E8F6EE; color:#14603A; font-size:11.5px; font-weight:700; line-height:1.2; letter-spacing:.01em; }
 .cat-puesto svg { flex-shrink:0; }
 .cat-puesto.grande { font-size:13.5px; padding:4px 10px 4px 8px; margin-top:8px; }
+.cat-tiempos-p { display:flex; flex-direction:column; gap:3px; margin-top:7px; font-size:12px; color:#314551; line-height:1.25; }
+.cat-tiempos-p > span { display:inline-flex; align-items:center; gap:5px; }
+.cat-tiempos-p svg { flex-shrink:0; color:#1556B8; }
+.cat-tiempos-p b { font-weight:700; color:#0E3A8A; }
+.cat-tiempos-p.grande { flex-direction:row; flex-wrap:wrap; gap:6px 18px; font-size:14px; margin-top:10px; }
 .cat-puesto-total { display:flex; align-items:center; justify-content:flex-end; gap:5px; margin:0 0 8px; font-size:13px; font-weight:700; color:#14603A; }
 .cat-total-cordobas { margin:-2px 0 6px; text-align:right; font-size:17px; font-weight:700; color:#0E3A8A; }
 .cat-total-cordobas span { font-size:12.5px; font-weight:500; color:#5B6B75; }
@@ -465,6 +470,16 @@ function Foto({ src, alt }) {
   return <img src={src} alt={alt} loading="lazy" onError={() => setRota(true)} />;
 }
 
+/** Días de producción y de envío que el cliente ve en cada producto. */
+function Tiempos({ grande }) {
+  return (
+    <span className={`cat-tiempos-p${grande ? " grande" : ""}`}>
+      <span><Factory size={grande ? 14 : 12} aria-hidden="true" />{T("Producción")}: <b className="cat-num">{DIAS_PRODUCCION} {T("días")}</b></span>
+      <span><Ship size={grande ? 14 : 12} aria-hidden="true" />{T("Envío")}: <b className="cat-num">{DIAS_ENVIO} {T("días")}</b></span>
+    </span>
+  );
+}
+
 const PORCENTAJES = [20, 30, 40];
 
 /** Fija el precio de venta de un producto: por porcentaje de ganancia sobre el costo o escrito a mano. */
@@ -572,6 +587,7 @@ function Tarjeta({ p, modo, abrir, guardar, pedir, opciones, elegir }) {
             {modo === "cliente" && p.antes > 0 && <s className="cat-antes cat-num">{dinero(p.antes)}</s>}
             {modo === "cliente" && precio > 0 && <span className="cat-cordobas cat-num">{cordobas(precio)}</span>}
             {modo === "cliente" && precio > 0 && <span className="cat-puesto"><MapPin size={12} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
+            {modo === "cliente" && <Tiempos />}
           </div>
           <span className="cat-ver">{T("Ver ficha")}<ChevronRight size={15} /></span>
         </div>
@@ -641,6 +657,7 @@ function Ficha({ p, modo, cerrar, pedir, opciones, elegir }) {
               {!interno && p.antes > 0 && <s className="cat-antes cat-num" style={{ marginLeft: 10, fontSize: 20 }}>{dinero(p.antes)}</s>}
               {!interno && precio > 0 && <span className="cat-cordobas grande cat-num">{cordobas(precio)}</span>}
               {!interno && precio > 0 && <span className="cat-puesto grande"><MapPin size={14} aria-hidden="true" />{T("Precio puesto en Nicaragua")}</span>}
+              {!interno && <Tiempos grande />}
             </div>
             {pedir && !(precio > 0) && <ConsultarPrecio p={p} whatsapp={pedir.whatsapp} />}
             {interno ? (
